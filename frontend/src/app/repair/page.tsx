@@ -9,6 +9,17 @@ import ChatPanel from './ChatPanel';
 import ConclusionPhase from './ConclusionPhase';
 import SaveGuidePrompt from './SaveGuidePrompt';
 import { useAuthUser } from '@/lib/auth';
+import {
+  AppLogoMarkIcon,
+  BoltIcon,
+  WrenchIcon,
+  QualityCheckIcon,
+  ShieldAlertIcon,
+  DisassemblyIcon,
+  CogIcon,
+  CheckCircleIcon,
+  DocumentIcon,
+} from '@/app/sharedIcons';
 
 interface RepairResponse {
   repair_steps: string[];
@@ -43,7 +54,8 @@ export default function RepairPage() {
     setUnlocked(true);
 
     const storedVinData = localStorage.getItem('rapp_vin_data');
-    if (storedVinData) setVinData(JSON.parse(storedVinData));
+    const parsedVinData = storedVinData ? JSON.parse(storedVinData) : null;
+    if (parsedVinData) setVinData(parsedVinData);
 
     const storedSymptoms = localStorage.getItem('rapp_symptoms') ?? '';
     setSymptoms(storedSymptoms);
@@ -55,6 +67,7 @@ export default function RepairPage() {
       obd_codes: [],
       tools,
       stripe_session_id: sessionId,
+      vehicle: parsedVinData,
     })
       .then(setRepair)
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to load repair steps.'))
@@ -91,12 +104,20 @@ export default function RepairPage() {
     const parts = text.split(/(Torque [^.,;]+)/gi);
     return parts.map((part, i) => {
       if (/^Torque /i.test(part)) {
-        return <span key={i} className="torque-spec">⚡ {part}</span>;
+        return (
+          <span key={i} className="torque-spec" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <BoltIcon size={14} /><span>{part}</span>
+          </span>
+        );
       }
       const subParts = part.split(/(\b(?:socket|wrench|extension|multimeter|jack stands?|ratchet|pliers)\b[^.,;]*)/gi);
       return subParts.map((sub, j) => {
         if (/\b(?:socket|wrench|extension|multimeter|jack stands?|ratchet|pliers)\b/i.test(sub)) {
-          return <span key={`${i}-${j}`} className="tool-chip">🔧 {sub}</span>;
+          return (
+            <span key={`${i}-${j}`} className="tool-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <WrenchIcon size={14} /><span>{sub}</span>
+            </span>
+          );
         }
         return sub;
       });
@@ -122,7 +143,7 @@ export default function RepairPage() {
         </div>
 
         <header className="page-header">
-          <p className="logo">⚙ RAPP</p>
+          <div className="logo"><AppLogoMarkIcon size={20} /><span>RAPP</span></div>
           <h1 className="page-title">Clinic-Grade Repair &amp; Mod Guide</h1>
           {vin && <p className="page-subtitle">VIN: {vin} • Verified Procedure</p>}
         </header>
@@ -267,9 +288,13 @@ export default function RepairPage() {
                           borderRadius: '0 8px 8px 0',
                           fontSize: '0.85rem',
                           color: 'var(--text-primary)',
-                          width: '100%'
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '8px'
                         }}>
-                          🔍 <strong>Quality Checkpoint:</strong> {getQualityCheck(stepText)}
+                          <QualityCheckIcon size={16} style={{ flexShrink: 0, marginTop: 2, color: '#3b82f6' }} />
+                          <div><strong>Quality Checkpoint:</strong> {getQualityCheck(stepText)}</div>
                         </div>
                       )}
 
@@ -282,7 +307,7 @@ export default function RepairPage() {
                 return (
                   <>
                     <div className="phase-section">
-                      <div className="phase-header">🛑 Phase 1: Safety &amp; Vehicle Preparation</div>
+                      <div className="phase-header"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><ShieldAlertIcon size={18} style={{ color: '#f87171' }} /><span>Phase 1: Safety &amp; Vehicle Preparation</span></span></div>
                       <ol className="step-list">
                         {steps.slice(0, p1).map((step, i) => renderStep(step, i))}
                       </ol>
@@ -290,7 +315,7 @@ export default function RepairPage() {
 
                     {p2 > p1 && (
                       <div className="phase-section">
-                        <div className="phase-header">🔩 Phase 2: Disassembly &amp; Access</div>
+                        <div className="phase-header"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><DisassemblyIcon size={18} style={{ color: 'var(--accent-orange)' }} /><span>Phase 2: Disassembly &amp; Access</span></span></div>
                         <ol className="step-list">
                           {steps.slice(p1, p2).map((step, idx) => renderStep(step, idx + p1))}
                         </ol>
@@ -299,7 +324,7 @@ export default function RepairPage() {
 
                     {p3 > p2 && (
                       <div className="phase-section">
-                        <div className="phase-header">⚙️ Phase 3: Component Replacement &amp; Torque</div>
+                        <div className="phase-header"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><CogIcon size={18} style={{ color: 'var(--accent-orange)' }} /><span>Phase 3: Component Replacement &amp; Torque</span></span></div>
                         {layoutFallbackAtPhase3Top && <LayoutDiagram />}
                         <ol className="step-list">
                           {steps.slice(p2, p3).map((step, idx) => renderStep(step, idx + p2))}
@@ -309,7 +334,7 @@ export default function RepairPage() {
 
                     {N > p3 && (
                       <div className="phase-section">
-                        <div className="phase-header">✅ Phase 4: Reassembly &amp; Torque Verification</div>
+                        <div className="phase-header"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><CheckCircleIcon size={18} style={{ color: '#4ade80' }} /><span>Phase 4: Reassembly &amp; Torque Verification</span></span></div>
                         <ol className="step-list">
                           {steps.slice(p3).map((step, idx) => renderStep(step, idx + p3))}
                         </ol>
@@ -348,9 +373,9 @@ export default function RepairPage() {
                         rel="noopener noreferrer"
                         data-testid="rag-citation"
                         className="citation-chip"
-                        style={{ textDecoration: 'none', color: 'var(--accent-yellow)', display: 'inline-flex', alignItems: 'center' }}
+                        style={{ textDecoration: 'none', color: 'var(--accent-yellow)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                       >
-                        📄 {cite} ↗
+                        <DocumentIcon size={15} /><span>{cite} ↗</span>
                       </a>
                     );
                   })}

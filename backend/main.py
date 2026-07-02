@@ -155,7 +155,7 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
 # 6. Helper Functions
 async def decode_vin_internal(vin: str) -> dict[str, Any]:
     vin_upper = vin.upper()
-    
+
     # Check for synthetic VIN
     if vin_upper.startswith("SYN"):
         if len(vin_upper) != 17 or not vin_upper.isalnum():
@@ -163,20 +163,20 @@ async def decode_vin_internal(vin: str) -> dict[str, Any]:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid VIN format. Must be exactly 17 alphanumeric characters."
             )
-            
+
         # Parse: SYN + YY (2 chars) + MAKE_CODE (5 chars) + MODEL_CODE (7 chars)
         yy_str = vin_upper[3:5]
         make_code = vin_upper[5:10]
         model_code = vin_upper[10:17]
-        
+
         try:
             year = 2000 + int(yy_str)
-        except ValueError:
+        except ValueError as err:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid year format in synthetic VIN."
-            )
-            
+            ) from err
+
         make_map = {
             "HONDA": "HONDA",
             "TOYOT": "TOYOTA",
@@ -184,7 +184,7 @@ async def decode_vin_internal(vin: str) -> dict[str, Any]:
             "LEXUS": "LEXUS",
             "CHEVR": "CHEVROLET"
         }
-        
+
         model_map = {
             "CIVICXX": "CIVIC",
             "ACCORDX": "ACCORD",
@@ -194,22 +194,22 @@ async def decode_vin_internal(vin: str) -> dict[str, Any]:
             "RX350XX": "RX350",
             "SILVERA": "SILVERADO"
         }
-        
+
         if make_code not in make_map:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Vehicle make not found in synthetic mapping"
             )
-            
+
         if model_code not in model_map:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Vehicle model not found in synthetic mapping"
             )
-            
+
         make = make_map[make_code]
         model = model_map[model_code]
-        
+
         make_specs = {
             "HONDA": {"engine": "1.5L 4-Cylinder", "drive_type": "FWD"},
             "TOYOT": {"engine": "2.5L 4-Cylinder", "drive_type": "FWD"},
@@ -217,9 +217,9 @@ async def decode_vin_internal(vin: str) -> dict[str, Any]:
             "LEXUS": {"engine": "3.5L V6", "drive_type": "AWD"},
             "CHEVR": {"engine": "5.3L V8", "drive_type": "AWD"}
         }
-        
+
         specs = make_specs[make_code]
-        
+
         return {
             "year": year,
             "make": make,
@@ -333,11 +333,24 @@ def check_high_risk(symptoms: str, obd_codes: list[str] | None) -> tuple[bool, s
 
 
 # 7. Request / Response Pydantic Schemas
+class VehicleInfo(BaseModel):
+    """Client-provided vehicle identity for flows without a decodable VIN
+    (e.g. the Year/Make/Model selector, which covers every NHTSA make)."""
+
+    year: str | int | None = None
+    make: str | None = None
+    model: str | None = None
+    engine: str | None = None
+    drive_type: str | None = None
+    powertrain: str | None = None
+
+
 class DiagnoseRequest(BaseModel):
     vin: str
     symptoms: str
     obd_codes: list[str] | str | None = None
     tools: list[str] | str | None = None
+    vehicle: VehicleInfo | None = None
 
     @field_validator("obd_codes")
     @classmethod
@@ -371,6 +384,7 @@ class RepairRequest(BaseModel):
     obd_codes: list[str] | str | None = None
     tools: list[str] | str | None = None
     stripe_session_id: str
+    vehicle: VehicleInfo | None = None
 
     @field_validator("obd_codes")
     @classmethod
@@ -476,7 +490,19 @@ async def repair(request: RepairRequest) -> RepairResponse:
             detail="Payment Required: stripe_session_id is required."
         )
 
-    vin_meta = await decode_vin_internal(request.vin)
+    # Prefer the client-supplied vehicle identity (YMM selector covers makes the
+    # synthetic-VIN decoder does not); fall back to decoding the VIN.
+    if request.vehicle and request.vehicle.make:
+        vin_meta = {
+            "vin": request.vin,
+            "year": str(request.vehicle.year or ""),
+            "make": request.vehicle.make,
+            "model": request.vehicle.model or "",
+            "engine": request.vehicle.engine or "",
+            "drive_type": request.vehicle.drive_type or "",
+        }
+    else:
+        vin_meta = await decode_vin_internal(request.vin)
 
     # Retrieve relevant steps from RAG store
     from backend.rag.retriever import retrieve
@@ -499,33 +525,48 @@ async def repair(request: RepairRequest) -> RepairResponse:
                 citation = f"{make_str} {model_str} Manual ({year_str})".strip()
             citations.append(citation)
     else:
-        # Fallback repair/modification steps and citations
-        repair_steps = [
-            "Disconnect negative battery terminal.",
-            "Replace ignition coil.",
-            "Disconnect negative battery terminal using a 10mm wrench to prevent accidental short-circuits during disassembly.",
-            "Remove the plastic engine beauty cover by loosening the 4 retaining nuts with a 10mm socket.",
-            "Locate the target component and disconnect the harness plug by pressing the lock tab and pulling gently.",
-            "Unscrew the mounting bolt using a 10mm socket and lift the old component straight out of the mounting well.",
-            "Compare the new component to the old one to verify fitment, then apply a thin layer of dielectric grease to the seal boot.",
-            "Insert the new component into the well, seating it firmly, and hand-tighten the mounting bolt first.",
-            "Torque the mounting bolt to exactly 7.5 ft-lbs using a torque wrench. Do not overtighten.",
-            "Reconnect the electrical harness plug ensuring the click sound is heard, reinstall the engine cover, and reconnect the negative battery terminal."
-        ]
-        citations = [
-            "Honda Civic ESM 2016-2021 Section 12-4",
-            "Lexus ESM 2016-2022 Section 14-8",
-            "Toyota Master Workshop Manual Pub. No. T3-094"
-        ]
+        # Fall back to the curated procedure template matched to the symptoms
+        # and OBD codes; only if nothing matches use the generic steps.
+        from backend.repair_templates import select_template
+
+        template = select_template(request.symptoms, request.obd_codes or [])
+        if template:
+            repair_steps = list(template.steps)
+            citations = list(template.citations)
+        else:
+            repair_steps = [
+                "Disconnect negative battery terminal.",
+                "Replace ignition coil.",
+                "Disconnect negative battery terminal using a 10mm wrench to prevent accidental short-circuits during disassembly.",
+                "Remove the plastic engine beauty cover by loosening the 4 retaining nuts with a 10mm socket.",
+                "Locate the target component and disconnect the harness plug by pressing the lock tab and pulling gently.",
+                "Unscrew the mounting bolt using a 10mm socket and lift the old component straight out of the mounting well.",
+                "Compare the new component to the old one to verify fitment, then apply a thin layer of dielectric grease to the seal boot.",
+                "Insert the new component into the well, seating it firmly, and hand-tighten the mounting bolt first.",
+                "Torque the mounting bolt to exactly 7.5 ft-lbs using a torque wrench. Do not overtighten.",
+                "Reconnect the electrical harness plug ensuring the click sound is heard, reinstall the engine cover, and reconnect the negative battery terminal."
+            ]
+            citations = [
+                "Honda Civic ESM 2016-2021 Section 12-4",
+                "Lexus ESM 2016-2022 Section 14-8",
+                "Toyota Master Workshop Manual Pub. No. T3-094"
+            ]
 
     if settings.openai_api_key:
         tools_str = ", ".join(request.tools or []) or "standard basic hand tools"
+        powertrain = (request.vehicle.powertrain if request.vehicle else None) or ""
+        powertrain_note = (
+            f" The vehicle powertrain is {powertrain} — adapt procedures accordingly "
+            f"(e.g. high-voltage isolation for hybrid/EV, no spark plugs on diesel/EV)."
+            if powertrain
+            else ""
+        )
         prompt = (
-            f"Generate a detailed, clinic-grade repair or modification procedure for VIN {request.vin} ({vin_meta.get('year')} {vin_meta.get('make')} {vin_meta.get('model')}). "
+            f"Generate a detailed, clinic-grade repair or modification procedure for VIN {request.vin} ({vin_meta.get('year')} {vin_meta.get('make')} {vin_meta.get('model')}, engine: {vin_meta.get('engine') or 'unspecified'}).{powertrain_note} "
             f"Symptoms/Target: {request.symptoms}. Available tools: {tools_str}. "
-            f"Retrieved OEM manual snippets: {repair_steps}. "
+            f"Reference procedure to improve upon: {repair_steps}. "
             f"Provide a comprehensive, step-by-step guide (from safety/preparation to access, replacement, and reassembly/verification) that takes the user to the very end of the project for a complete and full fix. "
-            f"Ensure steps include specific socket sizes (e.g. 10mm deep socket) and exact bolt torque specifications (e.g. 7.5 ft-lbs) where appropriate."
+            f"Ensure steps include specific socket sizes (e.g. 10mm deep socket) and exact bolt torque specifications phrased starting with the word 'Torque' (e.g. 'Torque the bolts to 7.5 ft-lbs') where appropriate. No emojis."
         )
         ai_steps_text = await call_openai_completion(prompt)
         if ai_steps_text:

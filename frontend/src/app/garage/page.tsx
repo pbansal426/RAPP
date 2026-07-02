@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { logIn, signUp, logOut, useAuthUser } from '@/lib/auth';
 import { listRepairs, type SavedRepair } from '@/lib/repairs';
+import { AppLogoMarkIcon } from '@/app/sharedIcons';
 
 export default function GaragePage() {
   const router = useRouter();
@@ -52,7 +53,7 @@ export default function GaragePage() {
       </div>
 
       <header className="page-header">
-        <p className="logo">⚙ RAPP</p>
+        <div className="logo"><AppLogoMarkIcon size={20} /><span>RAPP</span></div>
         <h1 className="page-title">My Garage</h1>
         <p className="page-subtitle">Your saved vehicles and repair guides.</p>
       </header>

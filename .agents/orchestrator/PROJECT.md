@@ -11,7 +11,7 @@ The application consists of a FastAPI backend and a Next.js 14 frontend, now evo
 | # | Name | Scope | Dependencies | Status | Conv ID |
 |---|------|-------|-------------|--------|---------|
 | 1 | Baseline Verification | Run existing unit/E2E tests and build checks | None | DONE | cc63ea38-72e0-440e-a1f6-42d13aa34d9d |
-| 2 | Home Page & Navigation Evolution | Cascading Y/M/M selector, Tesseract.js OCR capture, back navigation | M1 | IN_PROGRESS | a01c66a7-b7d5-4651-a589-ef536715fd7f |
+| 2 | Home Page & Navigation Evolution | Cascading Y/M/M selector, Tesseract.js OCR capture, back navigation | M1 | IN_PROGRESS | 2d642eba-c123-459f-80dd-7fc4f76e6498 |
 | 3 | Diagnose & Results Pages Evolution | Hero card, logo, searchable OBD-II picker, image upload preview, SVG tools, text reduction | M2 | PLANNED | |
 | 4 | Premium Repair Page | Inline diagrams, 5-phase procedure, side-panel chatbot with contextual prompts | M3 | PLANNED | |
 | 5 | Firebase Setup & Accounts | Client Firebase Auth & Firestore, optional sign-up, /garage route, Log In link | M4 | PLANNED | |

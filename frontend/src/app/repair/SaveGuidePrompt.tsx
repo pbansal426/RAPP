@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { signUp } from '@/lib/auth';
 import { saveRepair } from '@/lib/repairs';
 import { isFirebaseConfigured } from '@/lib/firebase';
+import { CheckCircleIcon } from '@/app/sharedIcons';
 
 interface SaveGuidePromptProps {
   vin: string;
@@ -28,13 +29,16 @@ export default function SaveGuidePrompt({ vin, vinData, symptoms, onDismiss }: S
     setError(null);
     try {
       const user = await signUp(email.trim(), password, displayName.trim() || undefined);
+      const paymentSessionId = localStorage.getItem(`rapp_unlocked_${vin}`) ?? undefined;
       await saveRepair(user.uid, {
         vin,
         year: vinData ? String(vinData.year ?? '') : undefined,
         make: vinData ? String(vinData.make ?? '') : undefined,
         model: vinData ? String(vinData.model ?? '') : undefined,
         engine: vinData ? String(vinData.engine ?? '') : undefined,
+        powertrain: vinData?.powertrain ? String(vinData.powertrain) : undefined,
         symptoms,
+        paymentSessionId,
       });
       setSaved(true);
     } catch (err) {
@@ -50,7 +54,7 @@ export default function SaveGuidePrompt({ vin, vinData, symptoms, onDismiss }: S
         type="button"
         aria-label="Dismiss"
         onClick={onDismiss}
-        style={{ position: 'absolute', top: 14, right: 14, background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.1rem' }}
+        style={{ position: 'absolute', top: 14, right: 14, background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.1rem', minHeight: 48, minWidth: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       >
         ✕
       </button>
@@ -58,7 +62,9 @@ export default function SaveGuidePrompt({ vin, vinData, symptoms, onDismiss }: S
       {saved ? (
         <>
           <p className="card-label">Saved</p>
-          <p style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: 6 }}>✅ This repair guide is saved to your garage.</p>
+          <div style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <CheckCircleIcon size={18} style={{ color: '#4ade80' }} /><span>This repair guide is saved to your garage.</span>
+          </div>
           <a href="/garage" className="btn btn-secondary" style={{ width: 'auto', padding: '0 18px', marginTop: 8 }}>Go to My Garage →</a>
         </>
       ) : !configured ? (
@@ -70,7 +76,9 @@ export default function SaveGuidePrompt({ vin, vinData, symptoms, onDismiss }: S
         <>
           <p className="card-label">Save Your Repair Guide</p>
           <p style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: 4 }}>Keep this guide in your garage</p>
-          <p className="text-muted text-sm" style={{ marginBottom: 16 }}>Optional — create a free account to revisit this VIN&apos;s repair history anytime.</p>
+          <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
+            Optional — a free account permanently saves this guide, your vehicle&apos;s repair history, and your payment for one-click unlocks next time.
+          </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <input

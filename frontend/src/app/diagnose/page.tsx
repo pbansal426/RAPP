@@ -15,6 +15,7 @@ import {
   SafetyGlovesIcon,
   PenetratingOilIcon,
 } from './toolIcons';
+import { AppLogoMarkIcon, CameraIcon } from '@/app/sharedIcons';
 
 const TOOLS = [
   { id: 'tool-hand-tools', label: 'Basic Hand Tools', Icon: HandToolsIcon },
@@ -87,15 +88,15 @@ export default function DiagnosePage() {
       </div>
 
       <header className="page-header">
-        <p className="logo">⚙ RAPP</p>
+        <div className="logo"><AppLogoMarkIcon size={20} /><span>RAPP</span></div>
         <h1 className="page-title">Diagnostic Input</h1>
-        <p className="page-subtitle">What&apos;s wrong, and what have you got to fix it?</p>
+        <p className="page-subtitle">Select symptoms, OBD-II codes, or desired modifications.</p>
       </header>
 
       <VehicleHeroCard vin={vin} vinData={vinData} />
 
       <div className="card">
-        <p className="card-label">Step 2 of 4 — Symptoms &amp; OBD-II Codes</p>
+        <p className="card-label">Step 2 — Symptoms &amp; OBD-II Codes</p>
 
         <ObdCodePicker onSelect={handleObdSelect} />
 
@@ -118,7 +119,7 @@ export default function DiagnosePage() {
             style={{ width: 'auto', padding: '0 18px' }}
             onClick={() => photoInputRef.current?.click()}
           >
-            📷 Attach Dashboard / Engine Bay Photo
+            <CameraIcon /> Attach Dashboard or Engine Bay Photo
           </button>
           <input
             type="file"

@@ -52,6 +52,35 @@ Lint/type-check (backend): `ruff check backend/`, `black --check backend/`, `myp
 - **Firebase** (`src/lib/firebase.ts`, `auth.ts`, `repairs.ts`) is client-only, v9 modular API, and must **no-op gracefully when `NEXT_PUBLIC_FIREBASE_*` env vars are unset** (getters return `null`; UI shows "not configured" states). No real Firebase project exists yet — don't make anything hard-depend on it. Firestore schema: `users/{uid}` + `users/{uid}/repairs/{repairId}`.
 - **CSS**: extend `globals.css`, don't replace it. Design tokens are CSS variables (`--bg-primary`, `--accent-orange`, etc.). The Tailwind-looking classes (`.dark`, `.bg-slate-900`, `.border-orange-500`, `.bg-orange-950`, `.text-orange-500`) are **not Tailwind** — they're hand-written hooks that Playwright asserts. `<body className="dark bg-slate-900">` in `layout.tsx` is asserted by tests. Manufacturer logos come from `logo.clearbit.com` via `src/lib/logos.ts` with a mandatory inline-SVG fallback (the CDN is unofficial and fails offline; never gate UI on it).
 
+## Pinned contract — Claude (backend) / Gemini (frontend) split
+
+Work is currently split: Claude owns `backend/` and `frontend/src/lib/*.ts` (the typed data/API layer — `api.ts`, `firebase.ts`, `auth.ts`, `repairs.ts`, `nhtsa.ts`, `obdCodes.ts`, `logos.ts`); Gemini owns presentational frontend (`frontend/src/app/**/*.tsx`, `globals.css`) — visuals, copy, icons, layout. Neither side may change the shapes below without updating this section and notifying the other. Presentational code may read new fields off these shapes but must not invent new request/response fields, rename `data-testid`s, or change localStorage keys.
+
+**`POST /api/diagnose` / `POST /api/repair` request body** (`RepairRequest` adds `stripe_session_id: string` on top of this):
+```ts
+{
+  vin: string;
+  symptoms: string;
+  obd_codes: string[];   // always send as an array
+  tools: string[];       // tool-* ids from the checkbox list
+  vehicle: {              // optional — send whatever's in localStorage['rapp_vin_data']
+    year?: string | number;
+    make?: string;
+    model?: string;
+    engine?: string;
+    drive_type?: string;
+    powertrain?: string;  // one of nhtsa.ts POWERTRAINS: "Gasoline" | "Diesel" | "Hybrid" | "Plug-in Hybrid" | "Electric (EV)"
+  } | null;
+}
+```
+When `vehicle.make` is present, the backend trusts it directly instead of re-decoding the VIN — this is what makes the Year/Make/Model selector work for makes outside the old synthetic-VIN 5-make map. `rapp_vin_data` in localStorage should always be forwarded as `vehicle` verbatim; don't reshape it.
+
+**`POST /api/diagnose` response**: `{ summary: string; is_high_risk: boolean; high_risk_system: string | null; warning_message: string | null }`
+
+**`POST /api/repair` response**: `{ repair_steps: string[]; citations: string[] }` — still a flat array of plain strings (backed by OpenAI, the curated template library in `backend/repair_templates.py`, or RAG, in that preference order; frontend can't tell which produced it and shouldn't try). Torque callouts are guaranteed to start with the literal word `"Torque "` so the existing highlight regex in `repair/page.tsx` keeps working.
+
+**Frozen `data-testid`s** — see Test infrastructure section below for the Playwright-asserted ones. Also currently in use and not to be renamed: `select-powertrain`, `engine-detail` (new optional fields on the home-page Year/Make/Model selector, not yet asserted by Playwright but part of the vehicle payload above).
+
 ## Test infrastructure (unusual — read before touching tests)
 
 `tests/e2e-mvp-flow.spec.ts` selectors are **frozen contracts**. Never rename/remove these `data-testid`s: `vin-input`, `submit-vin-btn`, `scan-barcode-btn`, `select-year/make/model`, `submit-ymm-btn`, `symptoms-input`, `tool-hand-tools`, `tool-jack-stands`, `tool-multimeter`, `submit-diagnose-btn`, `free-diagnosis-summary`, `locked-repair-steps`, `payment-cta-btn` (must contain "Unlock"), `safety-warning-banner` (orange classes, no dismiss button), `detailed-repair-steps`, `rag-citation`, `back-to-home-btn`. UI requirements the tests enforce: ≥48px touch targets on all interactive elements, dark-mode body class.

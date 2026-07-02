@@ -1,3 +1,5 @@
+import { FlagIcon, CheckCircleIcon } from '@/app/sharedIcons';
+
 interface ConclusionPhaseProps {
   symptoms: string;
 }
@@ -7,7 +9,7 @@ export default function ConclusionPhase({ symptoms }: ConclusionPhaseProps) {
 
   return (
     <div className="phase-section" data-testid="conclusion-phase">
-      <div className="phase-header">🏁 Phase 5: Conclusion &amp; Verification</div>
+      <div className="phase-header"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><FlagIcon size={18} style={{ color: '#4ade80' }} /><span>Phase 5: Conclusion &amp; Verification</span></span></div>
       <div className="card" style={{ margin: 0 }}>
         <p style={{ fontWeight: 700, marginBottom: 8 }}>Clear the Code(s) &amp; Confirm the Fix</p>
         <p className="text-muted" style={{ marginBottom: 14 }}>
@@ -33,7 +35,10 @@ export default function ConclusionPhase({ symptoms }: ConclusionPhaseProps) {
         </ul>
 
         <div className="tool-match-pill" style={{ display: 'inline-flex' }}>
-          ✅ You&apos;re done! If the symptom hasn&apos;t returned after your test drive, the repair is complete.
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <CheckCircleIcon size={16} style={{ color: '#4ade80' }} />
+            <span>You&apos;re done! If the symptom hasn&apos;t returned after your test drive, the repair is complete.</span>
+          </span>
         </div>
       </div>
     </div>

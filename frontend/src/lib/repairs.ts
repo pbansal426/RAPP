@@ -1,6 +1,6 @@
 'use client';
 
-import { collection, addDoc, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
 
 export interface SavedRepairInput {
@@ -9,7 +9,12 @@ export interface SavedRepairInput {
   make?: string;
   model?: string;
   engine?: string;
+  powertrain?: string;
   symptoms: string;
+  // Reference to the checkout session that unlocked this repair. We never
+  // store card data ourselves — this lets future checkouts prefill/reuse
+  // the customer's payment method via the processor.
+  paymentSessionId?: string;
 }
 
 export interface SavedRepair extends SavedRepairInput {
@@ -24,6 +29,13 @@ export async function saveRepair(uid: string, repair: SavedRepairInput): Promise
     ...repair,
     savedAt: serverTimestamp(),
   });
+  if (repair.paymentSessionId) {
+    await setDoc(
+      doc(db, 'users', uid),
+      { savedPaymentMethod: true, lastPaymentSessionId: repair.paymentSessionId },
+      { merge: true }
+    );
+  }
 }
 
 export async function listRepairs(uid: string): Promise<SavedRepair[]> {
@@ -40,7 +52,9 @@ export async function listRepairs(uid: string): Promise<SavedRepair[]> {
       make: data.make,
       model: data.model,
       engine: data.engine,
+      powertrain: data.powertrain,
       symptoms: data.symptoms,
+      paymentSessionId: data.paymentSessionId,
       savedAt: data.savedAt?.toDate ? data.savedAt.toDate().toLocaleDateString() : null,
     } as SavedRepair;
   });

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { AssistantIcon } from '@/app/sharedIcons';
 
 interface ChatPanelProps {
   vin: string;
@@ -63,7 +64,7 @@ export default function ChatPanel({ vinData, symptoms }: ChatPanelProps) {
         onClick={() => setDrawerOpen((o) => !o)}
         aria-expanded={drawerOpen}
       >
-        <span>👨‍🔧 RAPP Garage Assistant</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><AssistantIcon size={18} /><span>RAPP Garage Assistant</span></span>
         <span className="repair-chat-handle-chevron" aria-hidden="true">{drawerOpen ? '▾' : '▴'}</span>
       </button>
 
@@ -79,7 +80,7 @@ export default function ChatPanel({ vinData, symptoms }: ChatPanelProps) {
         <input
           type="text"
           className="input"
-          style={{ height: 44, minHeight: 44, padding: '0 12px', fontSize: '0.9rem', flex: 1 }}
+          style={{ height: 48, minHeight: 48, padding: '0 12px', fontSize: '0.9rem', flex: 1 }}
           placeholder="Ask about torque, tools, safety..."
           value={chatInput}
           onChange={(e) => setChatInput(e.target.value)}
@@ -87,7 +88,7 @@ export default function ChatPanel({ vinData, symptoms }: ChatPanelProps) {
         />
         <button
           className="btn btn-primary"
-          style={{ width: 'auto', height: 44, minHeight: 44, padding: '0 16px', fontSize: '0.9rem' }}
+          style={{ width: 'auto', height: 48, minHeight: 48, padding: '0 16px', fontSize: '0.9rem' }}
           onClick={handleSendMessage}
         >
           Send

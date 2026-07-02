@@ -3,6 +3,30 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
+import {
+  HandToolsIcon,
+  SocketSetIcon,
+  TorqueWrenchIcon,
+  JackStandsIcon,
+  MultimeterIcon,
+  ObdScannerIcon,
+  SafetyGlovesIcon,
+  PenetratingOilIcon,
+} from '@/app/diagnose/toolIcons';
+import {
+  AppLogoMarkIcon,
+  AlertTriangleIcon,
+  ToolboxIcon,
+  CheckCircleIcon,
+  BoltIcon,
+  CartIcon,
+  BuildingIcon,
+  WrenchIcon,
+  StarIcon,
+  UnlockIcon,
+  ChecklistIcon,
+  QualityCheckIcon,
+} from '@/app/sharedIcons';
 
 interface DiagnoseResponse {
   summary: string;
@@ -47,11 +71,14 @@ export default function ResultsPage() {
     const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
     setOwnedTools(tools);
 
+    const storedVinData = localStorage.getItem('rapp_vin_data');
+
     api.post<DiagnoseResponse>('/api/diagnose', {
       vin: storedVin,
       symptoms: storedSymptoms,
       obd_codes: [],
       tools,
+      vehicle: storedVinData ? JSON.parse(storedVinData) : null,
     })
       .then(setDiagnosis)
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Diagnosis failed.'))
@@ -76,24 +103,24 @@ export default function ResultsPage() {
   const getToolRequirements = () => {
     const text = symptoms.toLowerCase();
     const req = [
-      { id: 'tool-hand-tools', label: '🔧 Basic Hand Tools (Screwdrivers, Pliers)', estCost: 15 },
-      { id: 'tool-socket-set', label: '🔌 Socket Set & Ratchet', estCost: 25 },
-      { id: 'tool-torque-wrench', label: '🔧 Torque Wrench', estCost: 20 },
+      { id: 'tool-hand-tools', label: 'Basic Hand Tools (Screwdrivers, Pliers)', estCost: 15, Icon: HandToolsIcon },
+      { id: 'tool-socket-set', label: 'Socket Set & Ratchet', estCost: 25, Icon: SocketSetIcon },
+      { id: 'tool-torque-wrench', label: 'Torque Wrench', estCost: 20, Icon: TorqueWrenchIcon },
     ];
     if (/(suspension|coilover|spring|strut|shock|exhaust|muffler|wheel|brake|rotor|caliper|pad|oil)/i.test(text)) {
-      req.push({ id: 'tool-jack-stands', label: '🚗 Jack & Jack Stands', estCost: 30 });
+      req.push({ id: 'tool-jack-stands', label: 'Jack & Jack Stands', estCost: 30, Icon: JackStandsIcon });
     }
     if (/(sensor|electrical|wire|harness|ignition|coil|plug|light|alternator|battery|voltage)/i.test(text)) {
-      req.push({ id: 'tool-multimeter', label: '⚡ Digital Multimeter', estCost: 12 });
+      req.push({ id: 'tool-multimeter', label: 'Digital Multimeter', estCost: 12, Icon: MultimeterIcon });
     }
     if (/(code|scan|obd|engine light|check engine|trouble)/i.test(text)) {
-      req.push({ id: 'tool-obd-scanner', label: '🖥️ OBD-II Scanner', estCost: 20 });
+      req.push({ id: 'tool-obd-scanner', label: 'OBD-II Scanner', estCost: 20, Icon: ObdScannerIcon });
     }
     if (/(nitrile|glove|glasses|safety|eye)/i.test(text) || true) {
-      req.push({ id: 'tool-nitrile-gloves', label: '🧤 Safety Glasses & Gloves', estCost: 5 });
+      req.push({ id: 'tool-nitrile-gloves', label: 'Safety Glasses & Gloves', estCost: 5, Icon: SafetyGlovesIcon });
     }
     if (/(rust|stuck|bolt|nut|spray|seized|suspension|exhaust)/i.test(text)) {
-      req.push({ id: 'tool-wd40', label: '🧴 Penetrating Oil (WD-40)', estCost: 6 });
+      req.push({ id: 'tool-wd40', label: 'Penetrating Oil (WD-40)', estCost: 6, Icon: PenetratingOilIcon });
     }
     return req;
   };
@@ -118,7 +145,7 @@ export default function ResultsPage() {
       </div>
 
       <header className="page-header">
-        <p className="logo">⚙ RAPP</p>
+        <div className="logo"><AppLogoMarkIcon size={20} /><span>RAPP</span></div>
         <h1 className="page-title">Diagnostic & Mod Planning Results</h1>
       </header>
 
@@ -130,7 +157,7 @@ export default function ResultsPage() {
           role="alert"
           aria-live="assertive"
         >
-          <span className="safety-banner-icon" aria-hidden="true">⚠️</span>
+          <span className="safety-banner-icon" aria-hidden="true"><AlertTriangleIcon size={20} /></span>
           <span>{safetyWarning}</span>
         </div>
       )}
@@ -149,8 +176,9 @@ export default function ResultsPage() {
             <div>
               <p style={{ fontSize: '1.05rem', lineHeight: 1.6, fontWeight: 500 }}>{diagnosis.summary}</p>
               {diagnosis.is_high_risk && (
-                <div style={{ marginTop: 14, padding: 12, background: 'rgba(239,68,68,0.15)', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: '0.9rem' }}>
-                  ⚠️ <strong>High-Risk Alert:</strong> Delaying this repair/modification risks secondary cascading component damage. Estimated potential collateral repair cost if ignored: <strong>$1,200+</strong>.
+                <div style={{ marginTop: 14, padding: 12, background: 'rgba(239,68,68,0.15)', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: '0.9rem', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <AlertTriangleIcon size={20} style={{ flexShrink: 0, marginTop: 2 }} />
+                  <div><strong>High-Risk Alert:</strong> Delaying this repair or modification risks secondary cascading component damage. Estimated potential collateral cost if ignored: <strong>$1,200+</strong>.</div>
                 </div>
               )}
             </div>
@@ -168,16 +196,16 @@ export default function ResultsPage() {
 
         {hasNoTools ? (
           <div style={{ padding: '14px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 8, marginTop: 10 }}>
-            <p style={{ fontSize: '0.9rem', color: '#60a5fa', fontWeight: 600, marginBottom: 8 }}>
-              🛠️ No Owned Tools Selected
+            <p style={{ fontSize: '0.9rem', color: '#60a5fa', fontWeight: 600, marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <ToolboxIcon size={18} /><span>No Owned Tools Selected</span>
             </p>
             <p className="text-muted text-sm" style={{ marginBottom: 10 }}>
               No worries! You can still easily complete this project. Here is your budget-optimized tool purchase plan:
             </p>
             <ul style={{ paddingLeft: 20, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
               {toolRequirements.map(t => (
-                <li key={t.id} style={{ marginBottom: 4 }}>
-                  <strong>{t.label}</strong> (Est: ${t.estCost}) — <span style={{ color: '#4ade80' }}>Buy on Amazon or AutoZone</span>
+                <li key={t.id} style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <t.Icon size={16} /> <span><strong>{t.label}</strong> (Est: ${t.estCost}) — <span style={{ color: '#4ade80' }}>Buy on Amazon or AutoZone</span></span>
                 </li>
               ))}
             </ul>
@@ -188,20 +216,28 @@ export default function ResultsPage() {
         ) : (
           <div>
             <div className="tool-match-pill" style={{ display: 'inline-flex', marginBottom: 12 }}>
-              {missingTools.length === 0 
-                ? '✅ Reassurance: You own all required tools to complete this repair/modification safely!'
-                : `⚡ RAPP matched ${toolRequirements.length - missingTools.length} of ${toolRequirements.length} tools. You have basic gear ready.`}
+              {missingTools.length === 0 ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <CheckCircleIcon size={16} style={{ color: '#4ade80' }} />
+                  <span>Reassurance: You own all required tools to complete this project safely.</span>
+                </span>
+              ) : (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <BoltIcon size={16} style={{ color: 'var(--accent-orange)' }} />
+                  <span>RAPP matched {toolRequirements.length - missingTools.length} of {toolRequirements.length} tools. You have basic gear ready.</span>
+                </span>
+              )}
             </div>
 
             {missingTools.length > 0 && (
               <div style={{ marginTop: 10, padding: 12, background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 8 }}>
-                <p style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--accent-yellow)', marginBottom: 6 }}>
-                  🛒 Missing Tools Needed (Smart Purchase Guide):
+                <p style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--accent-yellow)', marginBottom: 6, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <CartIcon size={16} /><span>Missing Tools Needed (Purchase Guide):</span>
                 </p>
-                <ul style={{ paddingLeft: 18, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                <ul style={{ paddingLeft: 6, listStyle: 'none', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                   {missingTools.map(t => (
-                    <li key={t.id} style={{ marginBottom: 4 }}>
-                      {t.label} (Est: ${t.estCost})
+                    <li key={t.id} style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <t.Icon size={16} /> <span>{t.label} (Est: ${t.estCost})</span>
                     </li>
                   ))}
                 </ul>
@@ -228,19 +264,19 @@ export default function ResultsPage() {
           </thead>
           <tbody>
             <tr>
-              <td>🏢 Dealership / Pro Shop</td>
+              <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><BuildingIcon size={16} /><span>Dealership / Pro Shop</span></span></td>
               <td>$450 – $900</td>
               <td>3 – 5 Days</td>
               <td className="text-muted">High labor markup + appointment delays</td>
             </tr>
             <tr>
-              <td>🔧 Independent Shop</td>
+              <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><WrenchIcon size={16} /><span>Independent Shop</span></span></td>
               <td>$200 – $400</td>
               <td>1 – 2 Days</td>
               <td className="text-muted">Variable quality & labor costs ($150+/hr)</td>
             </tr>
             <tr className="price-row-highlight">
-              <td>⚡ RAPP Guided DIY</td>
+              <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><BoltIcon size={16} /><span>RAPP Guided DIY</span></span></td>
               <td className="price-val-green">$35 – $80</td>
               <td>2 – 3 Hours</td>
               <td>Save up to 90% today with precise guided instructions</td>
@@ -266,13 +302,13 @@ export default function ResultsPage() {
         boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
       }}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-          <span className="badge" style={{ background: 'rgba(251,191,36,0.15)', color: 'var(--accent-yellow)' }}>
-            ⭐ Premium OEM Service Access
+          <span className="badge" style={{ background: 'rgba(251,191,36,0.15)', color: 'var(--accent-yellow)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <StarIcon size={14} /><span>Premium OEM Service Access</span>
           </span>
         </div>
-        <p className="paywall-gate-title" style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fff', letterSpacing: '-0.01em' }}>
-          🔓 Unlock Step-by-Step OEM Guide
-        </p>
+        <div className="paywall-gate-title" style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fff', letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <UnlockIcon size={22} /><span>Unlock Step-by-Step OEM Guide</span>
+        </div>
         
         <div style={{
           textAlign: 'left',
@@ -285,10 +321,10 @@ export default function ResultsPage() {
           flexDirection: 'column',
           gap: '8px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8' }}>💡 <strong>4-Phase Garage Safe Checklist</strong></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8' }}>🔧 <strong>Exact Socket & Tool Wrench Sizes</strong></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8' }}>⚡ <strong>Precise Bolt Torque Specs</strong> (Prevents stripping)</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8' }}>🔍 <strong>Constant Quality Checkpoints</strong></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><ChecklistIcon size={16} style={{ color: 'var(--accent-orange)' }} /> <strong>4-Phase Garage Safe Checklist</strong></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><WrenchIcon size={16} style={{ color: 'var(--accent-orange)' }} /> <strong>Exact Socket & Tool Wrench Sizes</strong></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><BoltIcon size={16} style={{ color: 'var(--accent-orange)' }} /> <strong>Precise Bolt Torque Specs</strong> (Prevents stripping)</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><QualityCheckIcon size={16} style={{ color: 'var(--accent-orange)' }} /> <strong>Constant Quality Checkpoints</strong></div>
         </div>
 
         <button
