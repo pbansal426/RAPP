@@ -1,0 +1,14 @@
+{
+  "name": "rapp-e2e",
+  "version": "1.0.0",
+  "description": "E2E testing infrastructure for RAPP",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^20.17.9",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,27 @@
+# Development overrides — hot reload via source mounts
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+services:
+  backend:
+    build:
+      target: builder          # Stop at builder stage (has Poetry + all dev deps)
+    command: >
+      uvicorn backend.main:app
+      --reload
+      --host 0.0.0.0
+      --port 8000
+    volumes:
+      - ./backend:/app/backend  # Hot reload Python source
+      - ./pyproject.toml:/app/pyproject.toml
+    environment:
+      - LOG_FORMAT=dev
+      - DEBUG=true
+
+  frontend:
+    command: pnpm dev
+    volumes:
+      - ./frontend/src:/app/src      # Hot reload Next.js source
+      - ./frontend/public:/app/public
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:8000

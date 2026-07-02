@@ -1,0 +1,8 @@
+allowBuilds:
+  protobufjs: set this to true or false
+  tesseract.js: set this to true or false
+  unrs-resolver: set this to true or false
+onlyBuiltDependencies:
+  - protobufjs
+  - tesseract.js
+  - unrs-resolver

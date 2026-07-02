@@ -1,0 +1,647 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+
+/* ── Design tokens ──────────────────────────────────────────────────────── */
+:root {
+  --bg-primary:    #0a0a0f;
+  --bg-surface:    #12121a;
+  --bg-elevated:   #1a1a26;
+  --border:        #2a2a3d;
+  --text-primary:  #f0f0f8;
+  --text-secondary:#9090b0;
+  --accent-orange: #f97316;
+  --accent-yellow: #fbbf24;
+  --accent-red:    #ef4444;
+  --radius:        12px;
+  --radius-sm:     8px;
+  --transition:    0.18s ease;
+}
+
+/* ── Reset ──────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* Tailwind-compat utility classes used by Playwright selectors */
+.dark { background-color: #0f172a; color: #f8fafc; }
+.bg-slate-900 { background-color: #0f172a; }
+
+/* Safety banner classes (Playwright expects these class names) */
+.border-orange-500 { border: 2px solid #f97316; }
+.bg-orange-950     { background-color: #431407; }
+.text-orange-500   { color: #f97316; }
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+.page {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 40px 20px 80px;
+  min-height: 100vh;
+}
+
+.page-header {
+  margin-bottom: 40px;
+  text-align: center;
+}
+
+.logo {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-orange);
+  margin-bottom: 8px;
+}
+
+.page-title {
+  font-size: clamp(1.8rem, 5vw, 2.8rem);
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.page-subtitle {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-top: 10px;
+}
+
+/* ── Cards ──────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  margin-bottom: 20px;
+}
+
+.card-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+/* ── Form elements ──────────────────────────────────────────────────────── */
+.input {
+  width: 100%;
+  min-height: 52px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 1.1rem;
+  padding: 14px 16px;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  outline: none;
+}
+.input::placeholder { color: var(--text-secondary); }
+.input:focus {
+  border-color: var(--accent-orange);
+  box-shadow: 0 0 0 3px rgba(249,115,22,0.15);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 52px;
+  min-height: 52px;
+  padding: 0 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform var(--transition), box-shadow var(--transition), opacity var(--transition);
+  text-decoration: none;
+  letter-spacing: 0.01em;
+}
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-orange), #ea580c);
+  color: #fff;
+  width: 100%;
+  height: 56px;
+  min-height: 56px;
+  font-size: 1.1rem;
+  box-shadow: 0 4px 20px rgba(249,115,22,0.3);
+}
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 6px 28px rgba(249,115,22,0.45);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  width: 100%;
+  min-height: 52px;
+}
+.btn-secondary:hover { border-color: var(--accent-orange); color: var(--accent-orange); }
+
+.btn-outline {
+  background: transparent;
+  color: var(--accent-orange);
+  border: 2px solid var(--accent-orange);
+  width: 100%;
+  height: 52px;
+}
+.btn-outline:hover { background: rgba(249,115,22,0.08); }
+
+/* ── Checkboxes ─────────────────────────────────────────────────────────── */
+.checkbox-group { display: flex; flex-direction: column; gap: 12px; }
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 52px;
+  padding: 0 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: border-color var(--transition), background var(--transition);
+}
+.checkbox-label:hover { border-color: var(--accent-orange); background: rgba(249,115,22,0.05); }
+.checkbox-label input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent-orange);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ── Safety banner ───────────────────────────────────────────────────────── */
+.safety-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 24px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.safety-banner-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ── Paywall divider ─────────────────────────────────────────────────────── */
+.paywall-gate {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 32px 24px;
+  text-align: center;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 8px,
+    rgba(42,42,61,0.3) 8px,
+    rgba(42,42,61,0.3) 16px
+  );
+}
+
+.paywall-gate-title {
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.paywall-gate-sub {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+
+/* ── Status badge ────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.badge-free { background: rgba(34,197,94,0.15); color: #4ade80; }
+.badge-locked { background: rgba(249,115,22,0.15); color: var(--accent-orange); }
+
+/* ── Repair steps ────────────────────────────────────────────────────────── */
+.step-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+
+.step-item {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 16px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  animation: fadeSlideIn 0.3s ease forwards;
+  opacity: 0;
+}
+.step-item:nth-child(1) { animation-delay: 0.05s; }
+.step-item:nth-child(2) { animation-delay: 0.10s; }
+.step-item:nth-child(3) { animation-delay: 0.15s; }
+.step-item:nth-child(4) { animation-delay: 0.20s; }
+.step-item:nth-child(5) { animation-delay: 0.25s; }
+
+.step-num {
+  min-width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent-orange);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-text { font-size: 0.95rem; line-height: 1.55; }
+
+/* ── Citation chip ───────────────────────────────────────────────────────── */
+.citation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(251,191,36,0.1);
+  border: 1px solid rgba(251,191,36,0.25);
+  border-radius: 100px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent-yellow);
+}
+
+/* ── Vehicle info strip ──────────────────────────────────────────────────── */
+.vin-strip {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  margin-bottom: 24px;
+  font-size: 0.88rem;
+}
+.vin-strip-item { color: var(--text-secondary); }
+.vin-strip-item strong { color: var(--text-primary); margin-left: 4px; }
+
+/* ── Animations ──────────────────────────────────────────────────────────── */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-orange {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.4); }
+  50%       { box-shadow: 0 0 0 8px rgba(249,115,22,0); }
+}
+
+.loading-spinner {
+  width: 20px; height: 20px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Utilities ───────────────────────────────────────────────────────────── */
+.text-muted  { color: var(--text-secondary); }
+.text-sm     { font-size: 0.875rem; }
+.mt-4        { margin-top: 16px; }
+.mb-4        { margin-bottom: 16px; }
+.w-full      { width: 100%; }
+.flex        { display: flex; }
+.gap-2       { gap: 8px; }
+.flex-wrap   { flex-wrap: wrap; }
+.sr-only     { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+/* ── Price Comparison Table & Hook Engine ────────────────────────────────── */
+.price-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 20px 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.price-table th, .price-table td {
+  padding: 14px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+.price-table th {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.price-table tr:last-child td { border-bottom: none; }
+.price-row-highlight {
+  background: rgba(249,115,22,0.1);
+  font-weight: 700;
+}
+.price-row-highlight td { color: #fff; }
+.price-val-green { color: #4ade80; font-weight: 800; font-size: 1.1rem; }
+
+.tool-match-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(34,197,94,0.12);
+  border: 1px solid rgba(34,197,94,0.3);
+  border-radius: 100px;
+  color: #4ade80;
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-top: 12px;
+}
+
+@media (max-width: 600px) {
+  .price-table th, .price-table td { padding: 10px 8px; font-size: 0.85rem; }
+  .sticky-mobile-cta {
+    position: sticky;
+    bottom: 16px;
+    z-index: 50;
+    margin-top: 24px;
+  }
+}
+
+/* ── Phased Repair Guides & Clinic-Grade Formatting ──────────────────────── */
+.phase-section {
+  margin-bottom: 28px;
+}
+.phase-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--accent-orange);
+  margin-bottom: 14px;
+}
+.tool-chip {
+  display: inline-block;
+  background: rgba(59,130,246,0.15);
+  border: 1px solid rgba(59,130,246,0.35);
+  color: #60a5fa;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin: 0 4px;
+}
+.torque-spec {
+  display: inline-block;
+  background: rgba(251,191,36,0.18);
+  border: 1px solid rgba(251,191,36,0.4);
+  color: var(--accent-yellow);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  margin: 0 4px;
+}
+.step-checkbox {
+  width: 24px;
+  height: 24px;
+  accent-color: var(--accent-orange);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.step-checked {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+/* ── Vehicle Hero Card ──────────────────────────────────────────────────── */
+.vehicle-hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: linear-gradient(135deg, var(--bg-surface), var(--bg-elevated));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+.vehicle-hero-logo {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.vehicle-hero-logo img { width: 40px; height: 40px; object-fit: contain; }
+.vehicle-hero-info { min-width: 0; }
+.vehicle-hero-title {
+  font-size: clamp(1.2rem, 4vw, 1.6rem);
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 6px 0 4px;
+  line-height: 1.15;
+}
+.vehicle-hero-sub {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* ── OBD-II Code Picker ─────────────────────────────────────────────────── */
+.obd-picker { position: relative; }
+.obd-picker-results {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+  list-style: none;
+  padding: 6px;
+}
+.obd-picker-result {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.obd-picker-result-active,
+.obd-picker-result:hover { background: rgba(249,115,22,0.12); }
+.obd-picker-code {
+  font-weight: 800;
+  color: var(--accent-orange);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+.obd-picker-desc {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.obd-picker-empty {
+  padding: 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* ── Repair page two-column shell + side-panel chatbot ──────────────────── */
+.repair-shell {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 40px 20px 80px;
+  min-height: 100vh;
+}
+.repair-main {
+  flex: 1;
+  min-width: 0;
+  max-width: 680px;
+}
+.repair-chat-panel {
+  width: 340px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 24px;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: rgba(26, 26, 38, 0.95);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+}
+.repair-chat-handle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: var(--bg-elevated);
+  border: none;
+  padding: 14px 16px;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--accent-orange);
+  cursor: default;
+  border-bottom: 1px solid var(--border);
+}
+.repair-chat-handle-chevron { display: none; }
+.repair-chat-body {
+  flex: 1;
+  min-height: 260px;
+  max-height: 420px;
+  padding: 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.repair-chat-bubble {
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  max-width: 92%;
+}
+.repair-chat-bubble-user {
+  align-self: flex-end;
+  background: var(--accent-orange);
+  color: #fff;
+  border-radius: 12px 12px 0 12px;
+}
+.repair-chat-bubble-bot {
+  align-self: flex-start;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-radius: 12px 12px 12px 0;
+}
+.repair-chat-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+@media (max-width: 900px) {
+  .repair-shell { flex-direction: column; padding-bottom: 240px; }
+  .repair-main { max-width: 100%; }
+  .repair-chat-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    max-height: 60vh;
+    border-radius: var(--radius) var(--radius) 0 0;
+    z-index: 900;
+    transform: translateY(calc(100% - 52px));
+    transition: transform var(--transition);
+  }
+  .repair-chat-panel.chat-drawer-open { transform: translateY(0); }
+  .repair-chat-handle { cursor: pointer; }
+  .repair-chat-handle-chevron { display: inline-block; }
+}
+
+
