@@ -13,20 +13,31 @@ def test_health_check(client):
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
+def _extended_vin_payload(**overrides):
+    payload = {
+        "ModelYear": "2018",
+        "Make": "HONDA",
+        "Model": "CIVIC",
+        "Trim": "EX",
+        "BodyClass": "Sedan/Saloon",
+        "VehicleType": "PASSENGER CAR",
+        "DisplacementL": "1.5",
+        "EngineCylinders": "4",
+        "EngineConfiguration": "Inline",
+        "DriveType": "FWD",
+        "FuelTypePrimary": "Gasoline",
+        "FuelTypeSecondary": "",
+        "ElectrificationLevel": "",
+    }
+    payload.update(overrides)
+    return payload
+
+
 @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
 def test_vin_decoding_success(mock_get, client):
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json.return_value = {
-        "Results": [
-            {"Variable": "Model Year", "Value": "2018"},
-            {"Variable": "Make", "Value": "HONDA"},
-            {"Variable": "Model", "Value": "CIVIC"},
-            {"Variable": "Displacement (L)", "Value": "1.5"},
-            {"Variable": "Engine Number of Cylinders", "Value": "4"},
-            {"Variable": "Drive Type", "Value": "FWD"},
-        ]
-    }
+    mock_response.json.return_value = {"Results": [_extended_vin_payload()]}
     mock_get.return_value = mock_response
 
     response = client.get("/api/vin/1HGBH41JXMN109186")
@@ -35,8 +46,74 @@ def test_vin_decoding_success(mock_get, client):
     assert data["year"] == 2018
     assert data["make"] == "HONDA"
     assert data["model"] == "CIVIC"
-    assert data["engine"] == "1.5L 4 Cylinders"
+    assert data["trim"] == "EX"
+    assert data["body_class"] == "Sedan/Saloon"
+    assert data["engine"] == "1.5L I4"
     assert data["drive_type"] == "FWD"
+    assert data["powertrain"] == "Gasoline"
+
+    # User-Agent header must be sent — some upstream NHTSA edge nodes reject
+    # requests with no User-Agent at all.
+    _, call_kwargs = mock_get.call_args
+    assert "User-Agent" in call_kwargs["headers"]
+
+
+@patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+def test_vin_decoding_powertrain_electric(mock_get, client):
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "Results": [
+            _extended_vin_payload(
+                Make="TESLA",
+                Model="MODEL 3",
+                FuelTypePrimary="Electric",
+                ElectrificationLevel="BEV - Battery Electric Vehicle (BEV)",
+            )
+        ]
+    }
+    mock_get.return_value = mock_response
+
+    response = client.get("/api/vin/5YJ3E1EA1KF000001")
+    assert response.status_code == 200
+    assert response.json()["powertrain"] == "Electric (EV)"
+
+
+@patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+def test_vin_decoding_powertrain_plugin_hybrid(mock_get, client):
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "Results": [
+            _extended_vin_payload(
+                Make="TOYOTA",
+                Model="RAV4 PRIME",
+                FuelTypePrimary="Gasoline",
+                FuelTypeSecondary="Electric",
+                ElectrificationLevel="PHEV - Plug-in Hybrid Electric Vehicle",
+            )
+        ]
+    }
+    mock_get.return_value = mock_response
+
+    response = client.get("/api/vin/JTMAB3FV0LD000001")
+    assert response.status_code == 200
+    assert response.json()["powertrain"] == "Plug-in Hybrid"
+
+
+@patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+def test_vin_decoding_retries_then_succeeds(mock_get, client):
+    import httpx
+
+    ok_response = MagicMock()
+    ok_response.status_code = 200
+    ok_response.json.return_value = {"Results": [_extended_vin_payload()]}
+    mock_get.side_effect = [httpx.ConnectError("transient"), ok_response]
+
+    response = client.get("/api/vin/1HGBH41JXMN109186")
+    assert response.status_code == 200
+    assert response.json()["make"] == "HONDA"
+    assert mock_get.call_count == 2
 
 def test_vin_decoding_invalid_format(client):
     # Short VIN
@@ -54,11 +131,7 @@ def test_vin_decoding_not_found(mock_get, client):
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
-        "Results": [
-            {"Variable": "Model Year", "Value": "2018"},
-            {"Variable": "Make", "Value": ""},
-            {"Variable": "Model", "Value": ""},
-        ]
+        "Results": [_extended_vin_payload(Make="", Model="")]
     }
     mock_get.return_value = mock_response
 
@@ -71,7 +144,22 @@ def test_vin_decoding_api_error(mock_get, client):
     import httpx
     mock_get.side_effect = httpx.ConnectError("Connection timed out")
 
+    # 1HG has a known WMI (Honda), so this now degrades to the offline
+    # fallback decode instead of a hard 502 -- see test below for the
+    # unknown-WMI case where 502 is still the right outcome.
     response = client.get("/api/vin/1HGBH41JXMN109186")
+    assert response.status_code == 200
+    assert response.json()["make"] == "HONDA"
+    assert response.json()["decode_source"] == "offline_fallback"
+
+@patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+def test_vin_decoding_api_error_unknown_wmi_returns_502(mock_get, client):
+    import httpx
+    mock_get.side_effect = httpx.ConnectError("Connection timed out")
+
+    # WVW (Volkswagen) isn't in the offline fallback table, so this must
+    # still surface a clear 502 rather than silently guessing a make.
+    response = client.get("/api/vin/WVWZZZ1JZXW000001")
     assert response.status_code == 502
     assert "Error communicating with NHTSA API" in response.json()["error"]
 
@@ -148,13 +236,7 @@ def test_repair_with_rag_results(mock_retrieve, mock_get, client):
     # Setup mock VIN Decode
     mock_decode_resp = MagicMock()
     mock_decode_resp.status_code = 200
-    mock_decode_resp.json.return_value = {
-        "Results": [
-            {"Variable": "Model Year", "Value": "2018"},
-            {"Variable": "Make", "Value": "HONDA"},
-            {"Variable": "Model", "Value": "CIVIC"},
-        ]
-    }
+    mock_decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
     mock_get.return_value = mock_decode_resp
 
     # Setup RAG mock
@@ -186,13 +268,7 @@ def test_repair_fallback(mock_retrieve, mock_get, client):
     # Setup mock VIN Decode
     mock_decode_resp = MagicMock()
     mock_decode_resp.status_code = 200
-    mock_decode_resp.json.return_value = {
-        "Results": [
-            {"Variable": "Model Year", "Value": "2018"},
-            {"Variable": "Make", "Value": "HONDA"},
-            {"Variable": "Model", "Value": "CIVIC"},
-        ]
-    }
+    mock_decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
     mock_get.return_value = mock_decode_resp
 
     # Setup RAG returning empty results
@@ -276,4 +352,136 @@ def test_synthetic_vin_decoding_errors(client):
     response = client.get("/api/vin/SYNXXHONDAACCORDX")
     assert response.status_code == 400
     assert "invalid year format" in response.json()["error"].lower()
+
+
+def test_diagnose_includes_recommended_parts_and_cost_breakdown(client):
+    payload = {
+        "vin": "1HGBH41JXMN109186",
+        "symptoms": "Engine shaking at idle",
+        "obd_codes": ["P0301"],
+        "tools": [],
+        "vehicle": {"year": 2018, "make": "HONDA", "model": "CIVIC"},
+    }
+    response = client.post("/api/diagnose", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert len(data["recommended_parts"]) > 0
+    part = data["recommended_parts"][0]
+    assert part["part_name"]
+    tiers = {opt["tier"] for opt in part["options"]}
+    assert tiers == {"OEM", "Aftermarket / Budget", "Upgrade"}
+    for opt in part["options"]:
+        assert opt["purchase_url"].startswith("https://")
+
+    breakdown = data["cost_breakdown"]
+    assert breakdown["parts_total"] > 0
+    assert breakdown["diy_total"] == round(4.00 + breakdown["parts_total"], 2)
+    assert breakdown["dealership_cost_range"][0] > breakdown["independent_shop_range"][0]
+
+
+def test_diagnose_no_template_match_has_empty_parts(client):
+    payload = {
+        "vin": "1HGBH41JXMN109186",
+        "symptoms": "purple unicorn glitter engine",
+        "obd_codes": [],
+        "tools": [],
+    }
+    response = client.post("/api/diagnose", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["recommended_parts"] == []
+    assert data["cost_breakdown"]["parts_total"] == 0.0
+    assert data["cost_breakdown"]["diy_total"] == 4.00
+
+
+# --- VIN photo OCR (/api/vin/ocr) ---
+
+def test_vin_ocr_rejects_unsupported_content_type(client):
+    response = client.post(
+        "/api/vin/ocr",
+        files={"file": ("vin.txt", b"not an image", "text/plain")},
+    )
+    assert response.status_code == 400
+    assert "Unsupported image type" in response.json()["error"]
+
+
+def test_vin_ocr_rejects_empty_file(client):
+    response = client.post(
+        "/api/vin/ocr",
+        files={"file": ("vin.jpg", b"", "image/jpeg")},
+    )
+    assert response.status_code == 400
+    assert "empty" in response.json()["error"].lower()
+
+
+def test_vin_ocr_unavailable_without_openai_key(client, monkeypatch):
+    monkeypatch.setattr(settings, "openai_api_key", None)
+    response = client.post(
+        "/api/vin/ocr",
+        files={"file": ("vin.jpg", b"fake-image-bytes", "image/jpeg")},
+    )
+    assert response.status_code == 503
+    assert "manually" in response.json()["error"].lower()
+
+
+@patch("httpx.AsyncClient.post", new_callable=AsyncMock)
+@patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+def test_vin_ocr_success(mock_get, mock_post, client, monkeypatch):
+    monkeypatch.setattr(settings, "openai_api_key", "sk-test-key")
+
+    vision_resp = MagicMock()
+    vision_resp.status_code = 200
+    vision_resp.json.return_value = {
+        "choices": [
+            {
+                "message": {
+                    "content": '{"vin": "1HGBH41JXMN109186", "confidence": 0.95}'
+                }
+            }
+        ]
+    }
+    mock_post.return_value = vision_resp
+
+    decode_resp = MagicMock()
+    decode_resp.status_code = 200
+    decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
+    mock_get.return_value = decode_resp
+
+    response = client.post(
+        "/api/vin/ocr",
+        files={"file": ("vin.jpg", b"fake-image-bytes", "image/jpeg")},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["vin"] == "1HGBH41JXMN109186"
+    assert 0.0 <= data["confidence"] <= 1.0
+    assert data["decoded_vehicle"]["make"] == "HONDA"
+
+
+@patch("httpx.AsyncClient.post", new_callable=AsyncMock)
+def test_vin_ocr_no_readable_vin_returns_422(mock_post, client, monkeypatch):
+    monkeypatch.setattr(settings, "openai_api_key", "sk-test-key")
+
+    vision_resp = MagicMock()
+    vision_resp.status_code = 200
+    vision_resp.json.return_value = {
+        "choices": [{"message": {"content": '{"vin": "", "confidence": 0.0}'}}]
+    }
+    mock_post.return_value = vision_resp
+
+    response = client.post(
+        "/api/vin/ocr",
+        files={"file": ("vin.jpg", b"fake-image-bytes", "image/jpeg")},
+    )
+    assert response.status_code == 422
+
+
+def test_sanitize_and_check_digit_helpers():
+    from backend.main import _sanitize_vin_candidate, _vin_check_digit_valid
+
+    assert _sanitize_vin_candidate(" 1hgb h41j-xmn109186 ") == "1HGBH41JXMN109186"
+    # 1HGBH41JXMN109186 is a real, check-digit-valid Honda VIN.
+    assert _vin_check_digit_valid("1HGBH41JXMN109186") is True
+    assert _vin_check_digit_valid("1HGBH41JXMN109187") is False
 

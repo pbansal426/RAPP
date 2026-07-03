@@ -1,12 +1,12 @@
-# BRIEFING — 2026-07-02T09:20:00Z
+# BRIEFING — 2026-07-03T06:54:03Z
 
 ## Mission
-Evolve RAPP Automotive AI Repair Engine with multiple vehicle entry methods, smarter inputs, inline diagrams, side-panel AI chatbot, and Firebase authentication.
+Execute Phase 2 of RAPP redesign, transforming the frontend into a trustworthy, professional automotive engineering platform with a Deep Industrial Navy design system, cascading vehicle selector, isolated OBD-II diagnostic tooling, and affiliate garage vault.
 
 ## 🔒 My Identity
 - Archetype: sentinel
 - Working directory: /Users/prathambansal/Dev/RAPP/.agents/sentinel
-- Orchestrator: f719a121-a842-4caf-9f8a-2c56620c3bf6
+- Orchestrator: 75d7f2e4-8897-456e-b1d1-e6bb176c5bfc
 - Victory Auditor: TBD
 
 ## 🔒 Key Constraints
@@ -14,9 +14,11 @@ Evolve RAPP Automotive AI Repair Engine with multiple vehicle entry methods, sma
 - Victory Audit is MANDATORY before reporting completion
 - Preserve existing data-testid and localStorage keys
 - Firebase SDK must only be initialized client-side in Next.js
+- Apply Deep Industrial Navy Design System (#0F172A, charcoal cards, #F97316 accents)
+- Maintain all core interactive UI flows (4-step selector, OBD-II tags, tool filters, sign-up modal) without console errors
 
 ## User Context
-- **Last user request**: Evolve the existing RAPP Automotive AI Repair Engine from a stateless prototype into a polished, professional application.
+- **Last user request**: Execute Phase 2 of the RAPP redesign with Deep Industrial Navy Design System, cascading 4-step vehicle selector, isolated OBD-II diagnostic tooling, and affiliate parts dashboard / garage vault.
 - **Pending clarifications**: none
 - **Delivered results**: none
 

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { fetchAllMakes, fetchModels, POWERTRAINS, type MakeGroups } from '@/lib/nhtsa';
+import { getTrimsForModel, lookupVehicleSpecs } from '@/lib/vehicleSpecs';
 import { AppLogoMarkIcon } from '@/app/sharedIcons';
 
 interface VinData {
@@ -40,6 +41,11 @@ export default function HomePage() {
   const [selectedYear, setSelectedYear] = useState('');
   const [selectedMake, setSelectedMake] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
+  const [selectedTrim, setSelectedTrim] = useState('');
+  const [selectedDriveType, setSelectedDriveType] = useState('');
+  const [powertrainLocked, setPowertrainLocked] = useState(false);
+  const [engineLocked, setEngineLocked] = useState(false);
+  const [driveLocked, setDriveLocked] = useState(false);
   const [selectedPowertrain, setSelectedPowertrain] = useState<string>('Gasoline');
   const [engineDetail, setEngineDetail] = useState('');
   const [makeGroups, setMakeGroups] = useState<MakeGroups | null>(null);
@@ -51,6 +57,33 @@ export default function HomePage() {
   useEffect(() => {
     fetchAllMakes().then(setMakeGroups).catch(() => setYmmError('Could not load vehicle makes. Check your connection.'));
   }, []);
+
+  // Auto-populate and lock specs when the curated table has unambiguous
+  // data for this year/make/model/trim; unknown vehicles keep manual inputs.
+  useEffect(() => {
+    const match = selectedModel
+      ? lookupVehicleSpecs(selectedYear, selectedMake, selectedModel, selectedTrim)
+      : null;
+
+    if (match?.powertrain) {
+      setSelectedPowertrain(match.powertrain);
+      setPowertrainLocked(true);
+    } else {
+      setPowertrainLocked(false);
+    }
+    if (match?.engine) {
+      setEngineDetail(match.engine);
+      setEngineLocked(true);
+    } else {
+      setEngineLocked(false);
+    }
+    if (match?.drive_type) {
+      setSelectedDriveType(match.drive_type);
+      setDriveLocked(true);
+    } else {
+      setDriveLocked(false);
+    }
+  }, [selectedYear, selectedMake, selectedModel, selectedTrim]);
 
   useEffect(() => {
     if (!selectedYear || !selectedMake) { setModels([]); return; }
@@ -67,12 +100,28 @@ export default function HomePage() {
     setSelectedYear(e.target.value);
     setSelectedMake('');
     setSelectedModel('');
+    setSelectedTrim('');
+    setSelectedDriveType('');
     setYmmError(null);
   };
 
   const handleMakeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedMake(e.target.value);
     setSelectedModel('');
+    setSelectedTrim('');
+    setSelectedDriveType('');
+    setYmmError(null);
+  };
+
+  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setSelectedModel(val);
+    if (val) {
+      const trims = getTrimsForModel(val);
+      setSelectedTrim(trims[0] || 'Base');
+    } else {
+      setSelectedTrim('');
+    }
     setYmmError(null);
   };
 
@@ -113,8 +162,9 @@ export default function HomePage() {
       year: selectedYear,
       make: selectedMake,
       model: displayModel,
+      trim: selectedTrim,
+      drive_type: selectedDriveType || '',
       engine,
-      drive_type: '',
       powertrain: selectedPowertrain,
     }));
     router.push('/diagnose');
@@ -131,6 +181,30 @@ export default function HomePage() {
     setError(null);
     setOcrLoading(true);
     try {
+      // First try backend OCR endpoint (supports HEIC, Vision AI, check-digits, and NHTSA auto-decode)
+      const formData = new FormData();
+      formData.append('file', file);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/api/vin/ocr`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.vin) {
+          setVin(data.vin);
+          if (data.decoded_vehicle && data.decoded_vehicle.make) {
+            localStorage.setItem('rapp_vin', data.vin);
+            localStorage.setItem('rapp_vin_data', JSON.stringify(data.decoded_vehicle));
+            router.push('/diagnose');
+            return;
+          }
+          return;
+        }
+      }
+
+      // Client-side fallback if backend API key is unconfigured or offline
       const { createWorker } = await import('tesseract.js');
       const worker = await createWorker('eng');
       const ret = await worker.recognize(file);
@@ -216,7 +290,7 @@ export default function HomePage() {
             type="file"
             ref={fileInputRef}
             style={{ display: 'none' }}
-            accept="image/*"
+            accept="image/*,.heic,.heif"
             capture="environment"
             onChange={handleFileChange}
           />
@@ -287,7 +361,7 @@ export default function HomePage() {
               data-testid="select-model"
               className="select"
               value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
+              onChange={handleModelChange}
               disabled={!selectedMake || modelsLoading || models.length === 0}
             >
               <option value="">{modelsLoading ? 'Loading models…' : '— Select Model —'}</option>
@@ -297,10 +371,29 @@ export default function HomePage() {
             </select>
           </div>
 
+          <div>
+            <label htmlFor="select-trim" style={{ display: 'block', fontSize: '0.875rem', marginBottom: 4, fontWeight: 500 }}>
+              4. Trim
+            </label>
+            <select
+              id="select-trim"
+              data-testid="select-trim"
+              className="select"
+              value={selectedTrim}
+              onChange={(e) => setSelectedTrim(e.target.value)}
+              disabled={!selectedModel}
+            >
+              <option value="">— Select Trim —</option>
+              {selectedModel && getTrimsForModel(selectedModel).map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+
           <div style={{ display: 'flex', gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label htmlFor="select-powertrain" style={{ display: 'block', fontSize: '0.875rem', marginBottom: 4, fontWeight: 500 }}>
-                4. Powertrain
+                Powertrain
               </label>
               <select
                 id="select-powertrain"
@@ -308,7 +401,7 @@ export default function HomePage() {
                 className="select"
                 value={selectedPowertrain}
                 onChange={(e) => setSelectedPowertrain(e.target.value)}
-                disabled={!selectedModel}
+                disabled={!selectedModel || powertrainLocked}
               >
                 {POWERTRAINS.map((p) => (
                   <option key={p} value={p}>{p}</option>
@@ -316,21 +409,41 @@ export default function HomePage() {
               </select>
             </div>
             <div style={{ flex: 1 }}>
-              <label htmlFor="engine-detail" style={{ display: 'block', fontSize: '0.875rem', marginBottom: 4, fontWeight: 500 }}>
-                Engine <span className="text-muted">(optional)</span>
+              <label htmlFor="select-drive" style={{ display: 'block', fontSize: '0.875rem', marginBottom: 4, fontWeight: 500 }}>
+                Drive Type
               </label>
-              <input
-                id="engine-detail"
-                data-testid="engine-detail"
-                className="input"
-                style={{ minHeight: 52 }}
-                type="text"
-                placeholder="e.g. 2.0T, 5.7L V8"
-                value={engineDetail}
-                onChange={(e) => setEngineDetail(e.target.value)}
-                disabled={!selectedModel}
-              />
+              <select
+                id="select-drive"
+                data-testid="select-drive"
+                className="select"
+                value={selectedDriveType}
+                onChange={(e) => setSelectedDriveType(e.target.value)}
+                disabled={!selectedModel || driveLocked}
+              >
+                <option value="">— Select Drive —</option>
+                <option value="FWD">FWD</option>
+                <option value="RWD">RWD</option>
+                <option value="AWD">AWD</option>
+                <option value="4WD">4WD</option>
+              </select>
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="engine-detail" style={{ display: 'block', fontSize: '0.875rem', marginBottom: 4, fontWeight: 500 }}>
+              Engine <span className="text-muted">(optional)</span>
+            </label>
+            <input
+              id="engine-detail"
+              data-testid="engine-detail"
+              className="input"
+              style={{ minHeight: 52 }}
+              type="text"
+              placeholder="e.g. 2.0T, 5.7L V8"
+              value={engineDetail}
+              onChange={(e) => setEngineDetail(e.target.value)}
+              disabled={!selectedModel || engineLocked}
+            />
           </div>
 
           {ymmError && (

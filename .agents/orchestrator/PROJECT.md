@@ -1,4 +1,4 @@
-# Project: Automotive AI Repair Engine Product Evolution
+# Project: RAPP Phase 2 Redesign
 
 ## Architecture
 The application consists of a FastAPI backend and a Next.js 14 frontend, now evolved to support Firebase user accounts and advanced ingestion.
@@ -10,12 +10,11 @@ The application consists of a FastAPI backend and a Next.js 14 frontend, now evo
 ## Milestones
 | # | Name | Scope | Dependencies | Status | Conv ID |
 |---|------|-------|-------------|--------|---------|
-| 1 | Baseline Verification | Run existing unit/E2E tests and build checks | None | DONE | cc63ea38-72e0-440e-a1f6-42d13aa34d9d |
-| 2 | Home Page & Navigation Evolution | Cascading Y/M/M selector, Tesseract.js OCR capture, back navigation | M1 | IN_PROGRESS | 2d642eba-c123-459f-80dd-7fc4f76e6498 |
-| 3 | Diagnose & Results Pages Evolution | Hero card, logo, searchable OBD-II picker, image upload preview, SVG tools, text reduction | M2 | PLANNED | |
-| 4 | Premium Repair Page | Inline diagrams, 5-phase procedure, side-panel chatbot with contextual prompts | M3 | PLANNED | |
-| 5 | Firebase Setup & Accounts | Client Firebase Auth & Firestore, optional sign-up, /garage route, Log In link | M4 | PLANNED | |
-| 6 | Final E2E Verification & Hardening | Run all E2E verification scenarios, pytest, pnpm build checks | M5 | PLANNED | |
+| 1 | Baseline Audit & Verification | Run existing unit/E2E tests and build checks | None | PLANNED | |
+| 2 | Design System & 4-Step Selector | globals.css styling updates, 4-step cascading dropdown on homepage with spec locking | M1 | PLANNED | |
+| 3 | Automotive Diagnostic Panel | Hero card, brand logo, isolated OBD-II tags/chips, HEIC preview, tool search & filter | M2 | PLANNED | |
+| 4 | Affiliate Parts & Garage Sign-up | Curated affiliate cards, 3-column price comparison, post-repair Garage Vault sign-up | M3 | PLANNED | |
+| 5 | Final Verification & Build Integrity | E2E test runs, pytest, frontend production build, forensic audit | M4 | PLANNED | |
 
 ## Code Layout
 ```
@@ -33,13 +32,18 @@ The application consists of a FastAPI backend and a Next.js 14 frontend, now evo
 │       ├── app/
 │       │   ├── page.tsx
 │       │   ├── diagnose/
+│       │   │   ├── ObdCodePicker.tsx
+│       │   │   ├── ToolSelector.tsx
+│       │   │   ├── VehicleHeroCard.tsx
 │       │   │   └── page.tsx
 │       │   ├── results/
+│       │   │   ├── PartsPurchasePlan.tsx
 │       │   │   └── page.tsx
 │       │   ├── repair/
-│       │   │   ├── page.tsx
-│       │   │   └── success/
-│       │   │       └── page.tsx
+│       │   │   ├── ChatPanel.tsx
+│       │   │   ├── ConclusionPhase.tsx
+│       │   │   ├── SaveGuidePrompt.tsx
+│       │   │   └── page.tsx
 │       │   ├── garage/
 │       │   │   └── page.tsx
 │       │   └── layout.tsx

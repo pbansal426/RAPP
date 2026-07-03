@@ -1,17 +1,26 @@
+import base64
+import json
 import logging
+import re
 import sys
 from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
 import structlog
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 
 # 1. Configuration Settings
@@ -153,6 +162,145 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
 
 
 # 6. Helper Functions
+_NHTSA_USER_AGENT = "RAPP-Backend/1.0 (+https://github.com/rapp; automotive VIN decoding)"
+_NHTSA_TIMEOUT = httpx.Timeout(10.0, connect=5.0)
+
+# NHTSA's EngineConfiguration values are long descriptive strings ("V-Shaped",
+# "Inline", "Flat / Boxer", ...); this maps them to the short form used in
+# everyday engine callouts ("V6", "I4", "Flat-6").
+_ENGINE_CONFIG_ABBR: list[tuple[str, str]] = [
+    ("V-SHAPED", "V"),
+    ("INLINE", "I"),
+    ("STRAIGHT", "I"),
+    ("FLAT", "Flat-"),
+    ("BOXER", "Flat-"),
+    ("W-SERIES", "W"),
+    ("ROTARY", "Rotary "),
+    ("WANKEL", "Rotary "),
+]
+
+
+def _clean_str(val: Any) -> str | None:
+    """Normalize an NHTSA field value: strips whitespace and treats the
+    API's various "no data" sentinels ("", "Not Applicable", "None", ...) as
+    absent so downstream code only ever sees a real value or ``None``."""
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s or s.lower() in ("", "none", "null", "not applicable"):
+        return None
+    return s
+
+
+def _config_abbr(config: str | None) -> str:
+    if not config:
+        return ""
+    upper = config.upper()
+    for needle, abbr in _ENGINE_CONFIG_ABBR:
+        if needle in upper:
+            return abbr
+    return ""
+
+
+def _build_engine_desc(
+    disp_l: str | None, cylinders: str | None, config: str | None
+) -> str:
+    abbr = _config_abbr(config)
+    parts = []
+    if disp_l:
+        parts.append(f"{disp_l}L")
+    if cylinders:
+        parts.append(f"{abbr}{cylinders}" if abbr else f"{cylinders}-Cylinder")
+    elif abbr:
+        parts.append(abbr.rstrip("-").strip() or abbr)
+    return " ".join(parts) if parts else "Unknown"
+
+
+def _derive_powertrain(fields: dict[str, str]) -> str | None:
+    """Classify the vehicle's powertrain from NHTSA's fuel-type/electrification
+    fields so an unambiguous result (e.g. a VIN that decodes to pure Gasoline)
+    lets the frontend skip asking the user to pick a powertrain manually."""
+    elec_level = (_clean_str(fields.get("ElectrificationLevel")) or "").upper()
+    fuel_primary = (_clean_str(fields.get("FuelTypePrimary")) or "").upper()
+    fuel_secondary = _clean_str(fields.get("FuelTypeSecondary"))
+
+    if "PHEV" in elec_level or "PLUG-IN" in elec_level:
+        return "Plug-in Hybrid"
+    if "BEV" in elec_level:
+        return "Electric (EV)"
+    if "HEV" in elec_level or "MHEV" in elec_level or "HYBRID" in elec_level or fuel_secondary:
+        return "Hybrid"
+    if "ELECTRIC" in fuel_primary:
+        return "Electric (EV)"
+    if "DIESEL" in fuel_primary:
+        return "Diesel"
+    if fuel_primary:
+        return "Gasoline"
+    return None
+
+
+@retry(
+    reraise=True,
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=0.5, min=0.5, max=4),
+    retry=retry_if_exception_type(
+        (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPStatusError)
+    ),
+)
+async def _fetch_nhtsa_vin_fields(vin: str) -> dict[str, str]:
+    """Query NHTSA's DecodeVinValuesExtended endpoint, which returns one flat
+    object per VIN (as opposed to DecodeVin's Variable/Value row list),
+    covering trim, body class, drive type, and fuel/electrification fields in
+    addition to the year/make/model/engine data the old endpoint provided.
+    Retries transient network/5xx failures with exponential backoff."""
+    url = f"{settings.nhtsa_base_url}/DecodeVinValuesExtended/{vin}?format=json"
+    response = await app.state.http_client.get(
+        url, headers={"User-Agent": _NHTSA_USER_AGENT}, timeout=_NHTSA_TIMEOUT
+    )
+    response.raise_for_status()
+    data = response.json()
+    results = data.get("Results") or []
+    if not results:
+        raise httpx.HTTPError("NHTSA returned no Results for VIN decode")
+    fields: dict[str, str] = results[0]
+    return fields
+
+
+def _extract_vehicle_data(fields: dict[str, str]) -> dict[str, Any]:
+    make = _clean_str(fields.get("Make"))
+    model = _clean_str(fields.get("Model"))
+    if not make or not model:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Vehicle make or model not found in NHTSA database",
+        )
+
+    year_str = _clean_str(fields.get("ModelYear"))
+    year: int | str | None = None
+    if year_str:
+        try:
+            year = int(year_str)
+        except ValueError:
+            year = year_str
+
+    disp_l = _clean_str(fields.get("DisplacementL"))
+    cylinders = _clean_str(fields.get("EngineCylinders"))
+    config = _clean_str(fields.get("EngineConfiguration"))
+
+    return {
+        "year": year,
+        "make": make,
+        "model": model,
+        "trim": _clean_str(fields.get("Trim")) or _clean_str(fields.get("Trim2")),
+        "engine": _build_engine_desc(disp_l, cylinders, config),
+        "drive_type": _clean_str(fields.get("DriveType")) or "Unknown",
+        "body_class": _clean_str(fields.get("BodyClass")),
+        "vehicle_type": _clean_str(fields.get("VehicleType")),
+        "fuel_type": _clean_str(fields.get("FuelTypePrimary")),
+        "powertrain": _derive_powertrain(fields),
+    }
+
+
 async def decode_vin_internal(vin: str) -> dict[str, Any]:
     vin_upper = vin.upper()
 
@@ -224,8 +372,13 @@ async def decode_vin_internal(vin: str) -> dict[str, Any]:
             "year": year,
             "make": make,
             "model": model,
+            "trim": None,
             "engine": specs["engine"],
-            "drive_type": specs["drive_type"]
+            "drive_type": specs["drive_type"],
+            "body_class": None,
+            "vehicle_type": None,
+            "fuel_type": "Gasoline",
+            "powertrain": "Gasoline",
         }
 
     # Validate VIN format: exactly 17 alphanumeric characters
@@ -235,67 +388,150 @@ async def decode_vin_internal(vin: str) -> dict[str, Any]:
             detail="Invalid VIN format. Must be exactly 17 alphanumeric characters."
         )
 
-    url = f"{settings.nhtsa_base_url}/DecodeVin/{vin}?format=json"
     try:
-        response = await app.state.http_client.get(url, timeout=10.0)
-        response.raise_for_status()
+        fields = await _fetch_nhtsa_vin_fields(vin)
     except httpx.HTTPError as err:
-        logger.error("NHTSA API communication error", error=str(err), url=url)
+        from backend.vin_fallback import wmi_fallback_decode
+
+        fallback = wmi_fallback_decode(vin)
+        if fallback is not None:
+            logger.warning(
+                "NHTSA unreachable, using offline WMI fallback decode",
+                error=str(err), vin=vin,
+            )
+            return fallback
+        logger.error(
+            "NHTSA API communication error", error=str(err), vin=vin
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Error communicating with NHTSA API"
         ) from err
 
-    data = response.json()
-    results = data.get("Results", [])
+    return _extract_vehicle_data(fields)
 
-    data_dict = {}
-    for item in results:
-        var_name = item.get("Variable")
-        var_val = item.get("Value")
-        if var_name and var_val is not None:
-            cleaned_val = str(var_val).strip()
-            if cleaned_val.lower() not in ("", "none", "null", "not applicable"):
-                data_dict[var_name] = cleaned_val
 
-    make = data_dict.get("Make")
-    model = data_dict.get("Model")
-    if not make or not model:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vehicle make or model not found in NHTSA database"
-        )
+# VIN alphabet excludes I, O, Q (they're visually ambiguous with 1/0/9).
+_VIN_ALLOWED_RE = re.compile(r"^[A-HJ-NPR-Z0-9]{17}$")
+_VIN_STRIP_RE = re.compile(r"[^A-Za-z0-9]")
 
-    year_str = data_dict.get("Model Year")
-    year: int | str | None = None
-    if year_str:
-        try:
-            year = int(year_str)
-        except ValueError:
-            year = year_str
+# Standard VIN check-digit algorithm (position 9): each character is mapped
+# to a numeric value, multiplied by a position weight, summed, then reduced
+# mod 11 ("X" represents a remainder of 10). Primarily meaningful for
+# North American VINs; VINs from other regions may legitimately fail this
+# check, so callers should treat it as a confidence signal, not a hard gate.
+_VIN_TRANSLITERATION: dict[str, int] = {
+    **{str(d): d for d in range(10)},
+    "A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "F": 6, "G": 7, "H": 8,
+    "J": 1, "K": 2, "L": 3, "M": 4, "N": 5, "P": 7, "R": 9,
+    "S": 2, "T": 3, "U": 4, "V": 5, "W": 6, "X": 7, "Y": 8, "Z": 9,
+}
+_VIN_POSITION_WEIGHTS = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2]
 
-    disp_l = data_dict.get("Displacement (L)")
-    cylinders = data_dict.get("Engine Number of Cylinders")
-    disp_cc = data_dict.get("Displacement (CC)")
 
-    if disp_l and cylinders:
-        engine = f"{disp_l}L {cylinders} Cylinders"
-    elif disp_l:
-        engine = f"{disp_l}L"
-    elif disp_cc and cylinders:
-        engine = f"{disp_cc}CC {cylinders} Cylinders"
-    elif disp_cc:
-        engine = f"{disp_cc}CC"
-    else:
-        engine = "Unknown"
+def _sanitize_vin_candidate(raw: str) -> str:
+    """Strip spaces/dashes/other punctuation and uppercase, per the OCR spec."""
+    return _VIN_STRIP_RE.sub("", raw).upper()
 
-    return {
-        "year": year,
-        "make": make,
-        "model": model,
-        "engine": engine,
-        "drive_type": data_dict.get("Drive Type", "Unknown")
+
+def _vin_check_digit_valid(vin: str) -> bool:
+    if len(vin) != 17:
+        return False
+    total = 0
+    for ch, weight in zip(vin, _VIN_POSITION_WEIGHTS, strict=True):
+        value = _VIN_TRANSLITERATION.get(ch)
+        if value is None:
+            return False
+        total += value * weight
+    remainder = total % 11
+    expected = "X" if remainder == 10 else str(remainder)
+    return vin[8] == expected
+
+
+@retry(
+    reraise=True,
+    stop=stop_after_attempt(2),
+    wait=wait_exponential(multiplier=0.5, min=0.5, max=2),
+    retry=retry_if_exception_type((httpx.TimeoutException, httpx.ConnectError)),
+)
+async def _call_vision_completion(payload: dict[str, Any]) -> httpx.Response:
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {settings.openai_api_key}",
+        "Content-Type": "application/json",
     }
+    return await app.state.http_client.post(
+        url, headers=headers, json=payload, timeout=httpx.Timeout(20.0, connect=5.0)
+    )
+
+
+async def _extract_vin_via_vision(
+    image_bytes: bytes, content_type: str
+) -> tuple[str | None, float]:
+    """Scan a VIN tag/door-jamb-sticker/registration-document photo with a
+    vision-capable OpenAI model and return a sanitized 17-char VIN candidate
+    plus a 0-1 confidence score (blended with the check-digit result), or
+    (None, 0.0) if nothing readable was found."""
+    b64 = base64.b64encode(image_bytes).decode("ascii")
+    data_url = f"data:{content_type};base64,{b64}"
+
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You extract Vehicle Identification Numbers (VINs) from photos "
+                    "of windshield tags, door jamb stickers, or registration "
+                    "documents. A VIN is exactly 17 characters using only digits "
+                    "and uppercase letters, and never contains the letters I, O, "
+                    "or Q. Respond with strict JSON only: "
+                    '{"vin": "<17-char VIN, or empty string if not confidently '
+                    'readable>", "confidence": <0.0-1.0>}.'
+                ),
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Extract the VIN from this image."},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            },
+        ],
+        "temperature": 0.0,
+        "max_tokens": 100,
+        "response_format": {"type": "json_object"},
+    }
+
+    try:
+        resp = await _call_vision_completion(payload)
+    except httpx.HTTPError as err:
+        logger.warning("VIN OCR vision call failed", error=str(err))
+        return None, 0.0
+
+    if resp.status_code != 200:
+        logger.warning("VIN OCR vision call non-200", status_code=resp.status_code)
+        return None, 0.0
+
+    try:
+        content = resp.json()["choices"][0]["message"]["content"]
+        parsed = json.loads(content)
+    except (KeyError, IndexError, ValueError) as err:
+        logger.warning("VIN OCR vision response unparseable", error=str(err))
+        return None, 0.0
+
+    vin_candidate = _sanitize_vin_candidate(str(parsed.get("vin") or ""))
+    if not _VIN_ALLOWED_RE.match(vin_candidate):
+        return None, 0.0
+
+    model_confidence = min(max(float(parsed.get("confidence") or 0.0), 0.0), 1.0)
+    confidence = model_confidence
+    if not _vin_check_digit_valid(vin_candidate):
+        # Not a hard rejection (non-NA VINs can legitimately fail this), but
+        # it's a meaningful signal the OCR may have mis-read a character.
+        confidence = min(confidence, 0.6)
+
+    return vin_candidate, round(confidence, 2)
 
 
 def check_high_risk(symptoms: str, obd_codes: list[str] | None) -> tuple[bool, str | None, str | None]:
@@ -335,13 +571,21 @@ def check_high_risk(symptoms: str, obd_codes: list[str] | None) -> tuple[bool, s
 # 7. Request / Response Pydantic Schemas
 class VehicleInfo(BaseModel):
     """Client-provided vehicle identity for flows without a decodable VIN
-    (e.g. the Year/Make/Model selector, which covers every NHTSA make)."""
+    (e.g. the Year/Make/Model selector, which covers every NHTSA make).
+    Also doubles as the shape of ``rapp_vin_data``, so it carries the
+    richer fields (trim, body_class, vehicle_type, fuel_type) that
+    /api/vin/{vin} now returns even though the repair/diagnose endpoints
+    only read year/make/model/engine/drive_type/powertrain today."""
 
     year: str | int | None = None
     make: str | None = None
     model: str | None = None
+    trim: str | None = None
     engine: str | None = None
     drive_type: str | None = None
+    body_class: str | None = None
+    vehicle_type: str | None = None
+    fuel_type: str | None = None
     powertrain: str | None = None
 
 
@@ -371,11 +615,38 @@ class DiagnoseRequest(BaseModel):
         return v
 
 
+class PartOption(BaseModel):
+    """One purchasable option for a recommended part, at a specific tier."""
+
+    tier: str  # "OEM" | "Aftermarket / Budget" | "Upgrade"
+    brand: str
+    part_number: str | None = None
+    title: str
+    estimated_price: float
+    purchase_url: str
+    rationale: str
+
+
+class RecommendedPart(BaseModel):
+    part_name: str
+    options: list[PartOption]
+
+
+class CostBreakdown(BaseModel):
+    dealership_cost_range: list[float]
+    independent_shop_range: list[float]
+    parts_total: float
+    diy_total: float
+    estimated_labor_hours: float
+
+
 class DiagnoseResponse(BaseModel):
     summary: str
     is_high_risk: bool
     high_risk_system: str | None = None
     warning_message: str | None = None
+    recommended_parts: list[RecommendedPart] = []
+    cost_breakdown: CostBreakdown | None = None
 
 
 class RepairRequest(BaseModel):
@@ -419,6 +690,12 @@ class CheckoutResponse(BaseModel):
     checkout_url: str
 
 
+class VinOcrResponse(BaseModel):
+    vin: str
+    confidence: float
+    decoded_vehicle: dict[str, Any] | None = None
+
+
 # 8. Endpoints
 @app.get("/health")
 async def health() -> dict[str, str]:
@@ -429,6 +706,56 @@ async def health() -> dict[str, str]:
 async def decode_vin(vin: str) -> dict[str, Any]:
     res: dict[str, Any] = await decode_vin_internal(vin)
     return res
+
+
+_OCR_ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic"}
+_OCR_MAX_IMAGE_BYTES = 8 * 1024 * 1024  # 8MB
+
+
+@app.post("/api/vin/ocr", response_model=VinOcrResponse)
+async def vin_ocr(file: UploadFile = File(...)) -> VinOcrResponse:  # noqa: B008
+    content_type = file.content_type or ""
+    if content_type not in _OCR_ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported image type. Use JPEG, PNG, WEBP, or HEIC.",
+        )
+
+    image_bytes = await file.read()
+    if not image_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty."
+        )
+    if len(image_bytes) > _OCR_MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image too large (max 8MB).",
+        )
+
+    if not settings.openai_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="VIN photo scanning is temporarily unavailable. Enter the VIN manually.",
+        )
+
+    vin_candidate, confidence = await _extract_vin_via_vision(
+        image_bytes, content_type
+    )
+    if not vin_candidate:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Could not read a valid VIN from the photo. Try a clearer, well-lit photo of the VIN tag.",
+        )
+
+    decoded_vehicle: dict[str, Any] | None = None
+    try:
+        decoded_vehicle = await decode_vin_internal(vin_candidate)
+    except HTTPException:
+        decoded_vehicle = None
+
+    return VinOcrResponse(
+        vin=vin_candidate, confidence=confidence, decoded_vehicle=decoded_vehicle
+    )
 
 
 async def call_openai_completion(prompt: str, system_prompt: str = "You are an automotive AI expert mechanic.") -> str | None:
@@ -474,11 +801,25 @@ async def diagnose(request: DiagnoseRequest) -> DiagnoseResponse:
         if ai_summary:
             summary = ai_summary
 
+    from backend.pricing import build_cost_breakdown, build_recommended_parts
+    from backend.repair_templates import select_template
+
+    template = select_template(request.symptoms, obd_list)
+    vehicle_desc = ""
+    if request.vehicle:
+        vehicle_desc = " ".join(
+            str(v)
+            for v in (request.vehicle.year, request.vehicle.make, request.vehicle.model)
+            if v
+        ).strip()
+
     return DiagnoseResponse(
         summary=summary,
         is_high_risk=is_high_risk,
         high_risk_system=high_risk_system,
-        warning_message=warning_message
+        warning_message=warning_message,
+        recommended_parts=build_recommended_parts(template, vehicle_desc),
+        cost_breakdown=build_cost_breakdown(template)
     )
 
 
@@ -504,10 +845,16 @@ async def repair(request: RepairRequest) -> RepairResponse:
     else:
         vin_meta = await decode_vin_internal(request.vin)
 
+    obd_list: list[str] = (
+        request.obd_codes
+        if isinstance(request.obd_codes, list)
+        else ([request.obd_codes] if request.obd_codes else [])
+    )
+
     # Retrieve relevant steps from RAG store
     from backend.rag.retriever import retrieve
 
-    query = f"{request.symptoms} " + " ".join(request.obd_codes or [])
+    query = f"{request.symptoms} " + " ".join(obd_list)
     results = retrieve(query=query.strip(), vin_meta=vin_meta, k=5)
 
     repair_steps = []
@@ -529,7 +876,7 @@ async def repair(request: RepairRequest) -> RepairResponse:
         # and OBD codes; only if nothing matches use the generic steps.
         from backend.repair_templates import select_template
 
-        template = select_template(request.symptoms, request.obd_codes or [])
+        template = select_template(request.symptoms, obd_list)
         if template:
             repair_steps = list(template.steps)
             citations = list(template.citations)

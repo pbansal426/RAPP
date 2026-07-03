@@ -203,4 +203,115 @@ test.describe('Automotive AI Repair Engine - Phase 1 MVP Flow', () => {
     await backBtn.click();
     await page.waitForURL(url => url.pathname === '/');
   });
+
+  test('Step 7: Cascading 4-Step Dropdowns Auto-Lock and Drive Type select', async ({ page }) => {
+    await page.goto('/');
+
+    const selectYear = page.locator('[data-testid="select-year"]');
+    const selectMake = page.locator('[data-testid="select-make"]');
+    const selectModel = page.locator('[data-testid="select-model"]');
+    const selectTrim = page.locator('[data-testid="select-trim"]');
+    const selectPowertrain = page.locator('[data-testid="select-powertrain"]');
+    const engineDetail = page.locator('[data-testid="engine-detail"]');
+    const selectDrive = page.locator('[data-testid="select-drive"]');
+    const submitYmmBtn = page.locator('[data-testid="submit-ymm-btn"]');
+
+    // 1. Initial state: Trim, Powertrain, Engine Detail, Drive are disabled/not fully populated/locked
+    await expect(selectTrim).toBeDisabled();
+
+    // 2. Select Year -> Select Make -> Select Model
+    await selectYear.selectOption('2010');
+    await selectMake.selectOption('TOYOTA');
+    await selectModel.selectOption('COROLLA');
+
+    // 3. Trim selector is now enabled
+    await expect(selectTrim).toBeEnabled();
+
+    // 4. Select Trim 'S' -> Auto-lock triggered
+    await selectTrim.selectOption('S');
+
+    // Verify fields are populated and locked (disabled)
+    await expect(selectPowertrain).toHaveValue('Gasoline');
+    await expect(selectPowertrain).toBeDisabled();
+    await expect(engineDetail).toHaveValue('1.8L I4');
+    await expect(engineDetail).toBeDisabled();
+    await expect(selectDrive).toHaveValue('FWD');
+    await expect(selectDrive).toBeDisabled();
+
+    // 5. Submit and verify values are stored in localStorage
+    await submitYmmBtn.click();
+    await page.waitForURL(/\/diagnose/);
+
+    const storedVinData = await page.evaluate(() => {
+      return JSON.parse(localStorage.getItem('rapp_vin_data') || '{}');
+    });
+
+    expect(storedVinData.trim).toBe('S');
+    expect(storedVinData.drive_type).toBe('FWD');
+    expect(storedVinData.powertrain).toBe('Gasoline');
+    expect(storedVinData.engine).toBe('Gasoline · 1.8L I4');
+  });
+
+  test('Step 8: Cascading 4-Step Dropdowns Auto-Lock for 2015 Highlander XLE', async ({ page }) => {
+    await page.goto('/');
+
+    const selectYear = page.locator('[data-testid="select-year"]');
+    const selectMake = page.locator('[data-testid="select-make"]');
+    const selectModel = page.locator('[data-testid="select-model"]');
+    const selectTrim = page.locator('[data-testid="select-trim"]');
+    const selectPowertrain = page.locator('[data-testid="select-powertrain"]');
+    const engineDetail = page.locator('[data-testid="engine-detail"]');
+    const selectDrive = page.locator('[data-testid="select-drive"]');
+    const submitYmmBtn = page.locator('[data-testid="submit-ymm-btn"]');
+
+    // Select Year -> Select Make -> Select Model
+    await selectYear.selectOption('2015');
+    await selectMake.selectOption('TOYOTA');
+    await selectModel.selectOption('HIGHLANDER');
+
+    // Select Trim 'XLE' -> Auto-lock triggered
+    await selectTrim.selectOption('XLE');
+
+    // Verify fields are populated and locked (disabled)
+    await expect(selectPowertrain).toHaveValue('Gasoline');
+    await expect(selectPowertrain).toBeDisabled();
+    await expect(engineDetail).toHaveValue('3.5L V6');
+    await expect(engineDetail).toBeDisabled();
+    await expect(selectDrive).toHaveValue('AWD');
+    await expect(selectDrive).toBeDisabled();
+
+    // Submit and verify values in localStorage
+    await submitYmmBtn.click();
+    await page.waitForURL(/\/diagnose/);
+
+    const storedVinData = await page.evaluate(() => {
+      return JSON.parse(localStorage.getItem('rapp_vin_data') || '{}');
+    });
+
+    expect(storedVinData.trim).toBe('XLE');
+    expect(storedVinData.drive_type).toBe('AWD');
+  });
+
+  test('Milestone 4: Price comparison table columns & Garage Sign-up presence', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.setItem('rapp_vin', '1HGBH41JXMN109186');
+      localStorage.setItem('rapp_symptoms', 'P0301 - Cylinder 1 Misfire Detected');
+    });
+    await page.goto('/results');
+
+    // Verify 3-column price comparison table
+    const table = page.locator('.price-table');
+    await expect(table).toBeVisible();
+
+    const headers = table.locator('th');
+    await expect(headers).toHaveCount(3);
+    await expect(headers.nth(0)).toContainText('Repair Method');
+    await expect(headers.nth(1)).toContainText('Estimated Cost');
+    await expect(headers.nth(2)).toContainText('Value & Details');
+
+    // Verify Garage Sign-up Section presence
+    const garageSection = page.locator('text=Save to My Garage & Keep Guide Forever');
+    await expect(garageSection).toBeVisible();
+  });
 });

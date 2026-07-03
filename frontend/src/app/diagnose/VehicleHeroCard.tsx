@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { getLogoUrl } from '@/lib/logos';
+import { getBrandLogoSvg } from './BrandLogos';
 
 interface VehicleHeroCardProps {
   vin: string;
@@ -29,16 +30,26 @@ export default function VehicleHeroCard({ vin, vinData }: VehicleHeroCardProps) 
 
   const year = String(vinData.year ?? '').trim();
   const make = String(vinData.make ?? '').trim();
-  const model = String(vinData.model ?? '').trim();
+  let model = String(vinData.model ?? '').trim();
+  const trim = String(vinData.trim ?? '').trim();
+  if (trim && !model.toLowerCase().includes(trim.toLowerCase())) {
+    model = `${model} ${trim}`;
+  }
+
   const engine = String(vinData.engine ?? '').trim();
   const drive = String(vinData.drive_type ?? vinData.drive ?? '').trim();
+  const powertrain = String(vinData.powertrain ?? vinData.fuel_type ?? '').trim();
   const logoUrl = getLogoUrl(make);
   const title = [year, make, model].filter(Boolean).join(' ') || 'Vehicle Identified';
+
+  const brandSvg = getBrandLogoSvg(make);
 
   return (
     <div className="vehicle-hero">
       <div className="vehicle-hero-logo">
-        {logoUrl && !logoFailed ? (
+        {brandSvg ? (
+          brandSvg
+        ) : logoUrl && !logoFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={logoUrl} alt={`${make} logo`} onError={() => setLogoFailed(true)} />
         ) : (
@@ -46,14 +57,18 @@ export default function VehicleHeroCard({ vin, vinData }: VehicleHeroCardProps) 
         )}
       </div>
       <div className="vehicle-hero-info">
-        <span className="badge badge-free">✓ Vehicle Found</span>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+          <span className="badge badge-free">✓ Vehicle Identified</span>
+          {powertrain && <span className="badge badge-pro" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', borderColor: 'rgba(34, 197, 94, 0.3)' }}>🔒 {powertrain} Powertrain Locked</span>}
+        </div>
         <h2 className="vehicle-hero-title">{title}</h2>
         <p className="vehicle-hero-sub">
-          {engine && <span>{engine}</span>}
-          {drive && <span> • {drive}</span>}
-          <span> • VIN {vin}</span>
+          {engine && <span>⚙️ {engine}</span>}
+          {drive && <span>🚗 {drive}</span>}
+          <span>🔑 VIN {vin}</span>
         </p>
       </div>
     </div>
   );
 }
+

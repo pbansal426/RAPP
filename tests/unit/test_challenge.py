@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock, AsyncMock
 from backend.main import app, settings
+from tests.unit.test_api import _extended_vin_payload
 
 @pytest.fixture
 def client():
@@ -19,13 +20,7 @@ def test_repair_symptom_only_no_obd_codes(mock_retrieve, mock_get, client):
     """
     mock_decode_resp = MagicMock()
     mock_decode_resp.status_code = 200
-    mock_decode_resp.json.return_value = {
-        "Results": [
-            {"Variable": "Model Year", "Value": "2018"},
-            {"Variable": "Make", "Value": "HONDA"},
-            {"Variable": "Model", "Value": "CIVIC"},
-        ]
-    }
+    mock_decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
     mock_get.return_value = mock_decode_resp
     mock_retrieve.return_value = []
 
@@ -50,13 +45,7 @@ def test_repair_rag_returns_none(mock_retrieve, mock_get, client):
     """
     mock_decode_resp = MagicMock()
     mock_decode_resp.status_code = 200
-    mock_decode_resp.json.return_value = {
-        "Results": [
-            {"Variable": "Model Year", "Value": "2018"},
-            {"Variable": "Make", "Value": "HONDA"},
-            {"Variable": "Model", "Value": "CIVIC"},
-        ]
-    }
+    mock_decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
     mock_get.return_value = mock_decode_resp
     
     mock_retrieve.return_value = None
@@ -83,13 +72,7 @@ def test_repair_rag_returns_empty_list(mock_retrieve, mock_get, client):
     """
     mock_decode_resp = MagicMock()
     mock_decode_resp.status_code = 200
-    mock_decode_resp.json.return_value = {
-        "Results": [
-            {"Variable": "Model Year", "Value": "2018"},
-            {"Variable": "Make", "Value": "HONDA"},
-            {"Variable": "Model", "Value": "CIVIC"},
-        ]
-    }
+    mock_decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
     mock_get.return_value = mock_decode_resp
     
     mock_retrieve.return_value = []
@@ -116,13 +99,7 @@ def test_repair_rag_missing_metadata_key(mock_retrieve, mock_get, client):
     """
     mock_decode_resp = MagicMock()
     mock_decode_resp.status_code = 200
-    mock_decode_resp.json.return_value = {
-        "Results": [
-            {"Variable": "Model Year", "Value": "2018"},
-            {"Variable": "Make", "Value": "HONDA"},
-            {"Variable": "Model", "Value": "CIVIC"},
-        ]
-    }
+    mock_decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
     mock_get.return_value = mock_decode_resp
     
     mock_retrieve.return_value = [
@@ -155,13 +132,7 @@ def test_repair_rag_metadata_none(mock_retrieve, mock_get, client):
     """
     mock_decode_resp = MagicMock()
     mock_decode_resp.status_code = 200
-    mock_decode_resp.json.return_value = {
-        "Results": [
-            {"Variable": "Model Year", "Value": "2018"},
-            {"Variable": "Make", "Value": "HONDA"},
-            {"Variable": "Model", "Value": "CIVIC"},
-        ]
-    }
+    mock_decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
     mock_get.return_value = mock_decode_resp
     
     mock_retrieve.return_value = [

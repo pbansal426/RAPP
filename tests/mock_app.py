@@ -43,6 +43,7 @@ async def root():
         <div>
             <select data-testid="select-year" id="select-year" style="display: block; margin-bottom: 10px; padding: 8px; font-size: 16px;">
                 <option value="">Select Year</option>
+                <option value="2010">2010</option>
                 <option value="2015">2015</option>
                 <option value="2023">2023</option>
                 <option value="2026">2026</option>
@@ -58,6 +59,23 @@ async def root():
             <select data-testid="select-model" id="select-model" style="display: block; margin-bottom: 10px; padding: 8px; font-size: 16px;" disabled>
                 <option value="">Select Model</option>
             </select>
+            <select data-testid="select-trim" id="select-trim" style="display: block; margin-bottom: 10px; padding: 8px; font-size: 16px;" disabled>
+                <option value="">Select Trim</option>
+            </select>
+            <select data-testid="select-powertrain" id="select-powertrain" style="display: block; margin-bottom: 10px; padding: 8px; font-size: 16px;" disabled>
+                <option value="Gasoline">Gasoline</option>
+                <option value="Diesel">Diesel</option>
+                <option value="Hybrid">Hybrid</option>
+                <option value="Electric (EV)">Electric (EV)</option>
+            </select>
+            <select data-testid="select-drive" id="select-drive" style="display: block; margin-bottom: 10px; padding: 8px; font-size: 16px;" disabled>
+                <option value="">Select Drive</option>
+                <option value="FWD">FWD</option>
+                <option value="RWD">RWD</option>
+                <option value="AWD">AWD</option>
+                <option value="4WD">4WD</option>
+            </select>
+            <input data-testid="engine-detail" id="engine-detail" type="text" placeholder="Engine details" style="display: block; margin-bottom: 10px; padding: 8px; font-size: 16px;" disabled />
             <button data-testid="submit-ymm-btn" id="submit-ymm-btn" style="display: block; height: {btn_height};" disabled>Confirm Vehicle</button>
         </div>
     </div>
@@ -75,14 +93,29 @@ async def root():
         const yearSel = document.getElementById('select-year');
         const makeSel = document.getElementById('select-make');
         const modelSel = document.getElementById('select-model');
+        const trimSel = document.getElementById('select-trim');
+        const powertrainSel = document.getElementById('select-powertrain');
+        const driveSel = document.getElementById('select-drive');
+        const engineDetail = document.getElementById('engine-detail');
         const ymmBtn = document.getElementById('submit-ymm-btn');
 
         const modelsPerMake = {{
             HONDA: ['CIVIC', 'ACCORD'],
-            TOYOTA: ['CAMRY', 'COROLLA'],
+            TOYOTA: ['CAMRY', 'COROLLA', 'HIGHLANDER'],
             FORD: ['F-150'],
             LEXUS: ['RX350'],
             CHEVROLET: ['SILVERADO']
+        }};
+
+        const trimsPerModel = {{
+            COROLLA: ['Base', 'S', 'LE', 'XLE'],
+            HIGHLANDER: ['Base', 'LE', 'XLE', 'Limited'],
+            ACCORD: ['Base', 'Sport', 'Touring'],
+            CIVIC: ['Base', 'EX', 'LX'],
+            CAMRY: ['Base', 'LE', 'SE'],
+            'F-150': ['Base', 'XLT', 'Lariat'],
+            RX350: ['Base', 'F Sport'],
+            SILVERADO: ['Base', 'LT']
         }};
 
         yearSel.addEventListener('change', () => {{
@@ -93,6 +126,13 @@ async def root():
                 makeSel.value = '';
                 modelSel.disabled = true;
                 modelSel.value = '';
+                trimSel.disabled = true;
+                trimSel.value = '';
+                powertrainSel.disabled = true;
+                driveSel.disabled = true;
+                driveSel.value = '';
+                engineDetail.disabled = true;
+                engineDetail.value = '';
             }}
             updateBtn();
         }});
@@ -110,13 +150,80 @@ async def root():
             }} else {{
                 modelSel.disabled = true;
                 modelSel.value = '';
+                trimSel.disabled = true;
+                trimSel.value = '';
+                powertrainSel.disabled = true;
+                driveSel.disabled = true;
+                driveSel.value = '';
+                engineDetail.disabled = true;
+                engineDetail.value = '';
             }}
             updateBtn();
         }});
 
         modelSel.addEventListener('change', () => {{
+            if (modelSel.value) {{
+                trimSel.disabled = false;
+                trimSel.innerHTML = '<option value="">Select Trim</option>';
+                const trims = trimsPerModel[modelSel.value] || ['Base'];
+                trims.forEach(tr => {{
+                    const opt = document.createElement('option');
+                    opt.value = tr;
+                    opt.textContent = tr;
+                    trimSel.appendChild(opt);
+                }});
+                trimSel.value = trims[0]; 
+
+                powertrainSel.disabled = false;
+                driveSel.disabled = false;
+                engineDetail.disabled = false;
+                
+                checkAutoLock();
+            }} else {{
+                trimSel.disabled = true;
+                trimSel.value = '';
+                powertrainSel.disabled = true;
+                driveSel.disabled = true;
+                driveSel.value = '';
+                engineDetail.disabled = true;
+                engineDetail.value = '';
+            }}
             updateBtn();
         }});
+
+        trimSel.addEventListener('change', () => {{
+            checkAutoLock();
+            updateBtn();
+        }});
+
+        // Mirrors frontend/src/lib/vehicleSpecs.ts: entries whose specs are
+        // unambiguous for a year-range/make/model(/trim) get auto-locked.
+        const specTable = [
+            {{ make: 'TOYOTA', model: 'COROLLA', years: [2009, 2019], powertrain: 'Gasoline', engine: '1.8L I4', drive: 'FWD' }},
+            {{ make: 'TOYOTA', model: 'HIGHLANDER', trim: 'XLE', years: [2014, 2016], powertrain: 'Gasoline', engine: '3.5L V6', drive: 'AWD' }}
+        ];
+
+        function checkAutoLock() {{
+            const y = Number(yearSel.value);
+            const match = specTable.find(e =>
+                e.make === makeSel.value && e.model === modelSel.value &&
+                y >= e.years[0] && y <= e.years[1] &&
+                (e.trim === undefined || e.trim === trimSel.value)
+            );
+
+            if (match) {{
+                powertrainSel.value = match.powertrain;
+                powertrainSel.disabled = true;
+                engineDetail.value = match.engine;
+                engineDetail.disabled = true;
+                driveSel.value = match.drive;
+                driveSel.disabled = true;
+            }} else {{
+                powertrainSel.disabled = false;
+                engineDetail.disabled = false;
+                driveSel.disabled = false;
+            }}
+        }}
 
         function updateBtn() {{
             ymmBtn.disabled = !(yearSel.value && makeSel.value && modelSel.value);
@@ -125,9 +232,22 @@ async def root():
         ymmBtn.addEventListener('click', () => {{
             const yy = yearSel.value.slice(-2);
             const makeCodes = {{ HONDA: 'HONDA', TOYOTA: 'TOYOT', FORD: 'FORDX', LEXUS: 'LEXUS', CHEVROLET: 'CHEVR' }};
-            const modelCodes = {{ CIVIC: 'CIVICXX', ACCORD: 'ACCORDX', 'F-150': 'F150XXX', CAMRY: 'CAMRYXX', COROLLA: 'COROLLA', RX350: 'RX350XX', SILVERADO: 'SILVERA' }};
+            const modelCodes = {{ CIVIC: 'CIVICXX', ACCORD: 'ACCORDX', 'F-150': 'F150XXX', CAMRY: 'CAMRYXX', COROLLA: 'COROLLA', HIGHLANDER: 'HIGHLAN', RX350: 'RX350XX', SILVERADO: 'SILVERA' }};
             const vinVal = "SYN" + yy + makeCodes[makeSel.value] + modelCodes[modelSel.value];
             localStorage.setItem('rapp_vin', vinVal);
+
+            const engineVal = [powertrainSel.value, engineDetail.value.trim()].filter(Boolean).join(' · ');
+            localStorage.setItem('rapp_vin_data', JSON.stringify({{
+                vin: vinVal,
+                year: yearSel.value,
+                make: makeSel.value,
+                model: modelSel.value,
+                trim: trimSel.value,
+                drive_type: driveSel.value,
+                engine: engineVal,
+                powertrain: powertrainSel.value
+            }}));
+            
             if ({faulty_vin}) {{
                 console.log("Faulty VIN decoding enabled, not transitioning.");
             }} else {{
@@ -222,6 +342,46 @@ async def results():
         <h1>Diagnostic Results</h1>
         <div data-testid="free-diagnosis-summary" style="margin-bottom: 20px;">
             Free Diagnosis Summary: Misfire or other symptom detected.
+        </div>
+
+        <!-- 3-Column Price Comparison Table -->
+        <table class="price-table" style="width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #ccc;">
+            <thead>
+                <tr style="background: #1e293b; color: #fff;">
+                    <th style="padding: 10px; border: 1px solid #ccc; text-align: left;">Repair Method</th>
+                    <th style="padding: 10px; border: 1px solid #ccc; text-align: left;">Estimated Cost</th>
+                    <th style="padding: 10px; border: 1px solid #ccc; text-align: left;">Value & Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #ccc;">Dealership / Pro Shop</td>
+                    <td style="padding: 10px; border: 1px solid #ccc;">$450 – $900</td>
+                    <td style="padding: 10px; border: 1px solid #ccc;">3-5 Days Timeframe. High labor markup.</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #ccc;">Independent Auto Shop</td>
+                    <td style="padding: 10px; border: 1px solid #ccc;">$200 – $400</td>
+                    <td style="padding: 10px; border: 1px solid #ccc;">1-2 Days Timeframe. Variable quality.</td>
+                </tr>
+                <tr style="font-weight: bold; background: rgba(249,115,22,0.1);">
+                    <td style="padding: 10px; border: 1px solid #ccc;">RAPP Guided DIY</td>
+                    <td style="padding: 10px; border: 1px solid #ccc;">$39.00</td>
+                    <td style="padding: 10px; border: 1px solid #ccc;">2-3 Hours completion. Includes $4.00 guide fee.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Save to My Garage & Keep Guide Forever Section -->
+        <div class="card" style="border: 1px solid #f97316; padding: 15px; margin-bottom: 20px;">
+            <h3>Save to My Garage & Keep Guide Forever</h3>
+            <p>Create a free account to archive vehicle profile.</p>
+            <div style="display: flex; flex-direction: column; gap: 8px; max-width: 300px;">
+                <input class="input" type="text" placeholder="Name (optional)" />
+                <input class="input" type="email" placeholder="Email" />
+                <input class="input" type="password" placeholder="Password" />
+                <button class="btn btn-primary" style="height: 35px;">Save to My Garage</button>
+            </div>
         </div>
         
         <div id="locked-repair-steps" data-testid="locked-repair-steps" style="display: {locked_display}; margin-bottom: 20px;">

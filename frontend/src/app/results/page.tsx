@@ -3,6 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
+import PartsPurchasePlan from './PartsPurchasePlan';
+import { signUp } from '@/lib/auth';
+import { saveRepair } from '@/lib/repairs';
+import { isFirebaseConfigured } from '@/lib/firebase';
 import {
   HandToolsIcon,
   SocketSetIcon,
@@ -27,13 +31,7 @@ import {
   ChecklistIcon,
   QualityCheckIcon,
 } from '@/app/sharedIcons';
-
-interface DiagnoseResponse {
-  summary: string;
-  is_high_risk: boolean;
-  high_risk_system: string | null;
-  warning_message: string | null;
-}
+import type { DiagnosisResponse, VehicleInfo } from '@/lib/types';
 
 interface CheckoutResponse {
   checkout_url: string;
@@ -45,13 +43,49 @@ export default function ResultsPage() {
   const router = useRouter();
   const [vin, setVin] = useState('');
   const [symptoms, setSymptoms] = useState('');
-  const [diagnosis, setDiagnosis] = useState<DiagnoseResponse | null>(null);
+  const [diagnosis, setDiagnosis] = useState<DiagnosisResponse | null>(null);
+  const [vinData, setVinData] = useState<VehicleInfo | null>(null);
   const [safetyWarning, setSafetyWarning] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [payLoading, setPayLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [ownedTools, setOwnedTools] = useState<string[]>([]);
+
+  // Garage Vault Sign-up State
+  const [garageEmail, setGarageEmail] = useState('');
+  const [garagePassword, setGaragePassword] = useState('');
+  const [garageName, setGarageName] = useState('');
+  const [garageSubmitting, setGarageSubmitting] = useState(false);
+  const [garageError, setGarageError] = useState<string | null>(null);
+  const [garageSaved, setGarageSaved] = useState(false);
+
+  const firebaseConfigured = isFirebaseConfigured();
+
+  const handleGarageSignUp = async () => {
+    if (!garageEmail.trim() || !garagePassword.trim()) return;
+    setGarageSubmitting(true);
+    setGarageError(null);
+    try {
+      const user = await signUp(garageEmail.trim(), garagePassword, garageName.trim() || undefined);
+      const paymentSessionId = localStorage.getItem(`rapp_unlocked_${vin}`) ?? undefined;
+      await saveRepair(user.uid, {
+        vin,
+        year: vinData ? String(vinData.year ?? '') : undefined,
+        make: vinData ? String(vinData.make ?? '') : undefined,
+        model: vinData ? String(vinData.model ?? '') : undefined,
+        engine: vinData ? String(vinData.engine ?? '') : undefined,
+        powertrain: vinData?.powertrain ? String(vinData.powertrain) : undefined,
+        symptoms,
+        paymentSessionId,
+      });
+      setGarageSaved(true);
+    } catch (err) {
+      setGarageError(err instanceof Error ? err.message : 'Could not create your account. Please try again.');
+    } finally {
+      setGarageSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     const storedVin = localStorage.getItem('rapp_vin');
@@ -72,13 +106,17 @@ export default function ResultsPage() {
     setOwnedTools(tools);
 
     const storedVinData = localStorage.getItem('rapp_vin_data');
+    const parsedVehicle: VehicleInfo | null = storedVinData ? JSON.parse(storedVinData) : null;
+    if (parsedVehicle) setVinData(parsedVehicle);
 
-    api.post<DiagnoseResponse>('/api/diagnose', {
+    const obdCodes = JSON.parse(localStorage.getItem('rapp_obd_codes') ?? '[]') as string[];
+
+    api.post<DiagnosisResponse>('/api/diagnose', {
       vin: storedVin,
       symptoms: storedSymptoms,
-      obd_codes: [],
+      obd_codes: obdCodes,
       tools,
-      vehicle: storedVinData ? JSON.parse(storedVinData) : null,
+      vehicle: parsedVehicle,
     })
       .then(setDiagnosis)
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Diagnosis failed.'))
@@ -247,42 +285,155 @@ export default function ResultsPage() {
         )}
       </div>
 
+      {/* ── Affiliate Marketing Parts Purchase Plan ── */}
+      <PartsPurchasePlan
+        parts={diagnosis?.recommended_parts ?? []}
+        vehicleTitle={`${vinData?.year ?? ''} ${vinData?.make ?? ''} ${vinData?.model ?? ''}`.trim() || 'your vehicle'}
+      />
+
       {/* ── Price & Value Comparison Table ── */}
-      <div className="card">
+      <div className="card" style={{ marginTop: 24, background: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
         <p className="card-label">Why DIY With RAPP?</p>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: 8 }}>Project Route Comparison</h2>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: 8 }}>Project Route &amp; Cost Breakdown</h2>
         <p className="text-muted text-sm">See how guided RAPP self-repair/modification compares against traditional garage rates:</p>
         
-        <table className="price-table">
+        <table className="price-table" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', background: 'rgba(15, 23, 42, 0.6)' }}>
           <thead>
-            <tr>
-              <th>Method</th>
-              <th>Est. Cost</th>
-              <th>Timeframe</th>
-              <th>Value Advantage</th>
+            <tr style={{ background: '#1e293b' }}>
+              <th style={{ color: '#fff', borderBottom: '2px solid rgba(255, 255, 255, 0.15)', padding: '14px 16px' }}>Repair Method</th>
+              <th style={{ color: '#fff', borderBottom: '2px solid rgba(255, 255, 255, 0.15)', padding: '14px 16px' }}>Estimated Cost</th>
+              <th style={{ color: '#fff', borderBottom: '2px solid rgba(255, 255, 255, 0.15)', padding: '14px 16px' }}>Value &amp; Details</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><BuildingIcon size={16} /><span>Dealership / Pro Shop</span></span></td>
-              <td>$450 – $900</td>
-              <td>3 – 5 Days</td>
-              <td className="text-muted">High labor markup + appointment delays</td>
+            <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+              <td style={{ padding: '14px 16px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#f1f5f9', fontWeight: 600 }}>
+                  <BuildingIcon size={16} />
+                  <span>Dealership / Pro Shop</span>
+                </span>
+              </td>
+              <td style={{ padding: '14px 16px', color: '#f1f5f9' }}>
+                {diagnosis?.cost_breakdown
+                  ? `$${diagnosis.cost_breakdown.dealership_cost_range[0]} – $${diagnosis.cost_breakdown.dealership_cost_range[1]}`
+                  : '$450 – $900'}
+              </td>
+              <td style={{ padding: '14px 16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f1f5f9' }}>3 – 5 Days Timeframe</span>
+                  <span className="text-muted text-sm" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>High labor markup + OEM overhead + appointment delays</span>
+                </div>
+              </td>
             </tr>
-            <tr>
-              <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><WrenchIcon size={16} /><span>Independent Shop</span></span></td>
-              <td>$200 – $400</td>
-              <td>1 – 2 Days</td>
-              <td className="text-muted">Variable quality & labor costs ($150+/hr)</td>
+            <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+              <td style={{ padding: '14px 16px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#f1f5f9', fontWeight: 600 }}>
+                  <WrenchIcon size={16} />
+                  <span>Independent Auto Shop</span>
+                </span>
+              </td>
+              <td style={{ padding: '14px 16px', color: '#f1f5f9' }}>
+                {diagnosis?.cost_breakdown
+                  ? `$${diagnosis.cost_breakdown.independent_shop_range[0]} – $${diagnosis.cost_breakdown.independent_shop_range[1]}`
+                  : '$200 – $400'}
+              </td>
+              <td style={{ padding: '14px 16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f1f5f9' }}>1 – 2 Days Timeframe</span>
+                  <span className="text-muted text-sm" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Variable quality & labor rates ($150+/hr)</span>
+                </div>
+              </td>
             </tr>
-            <tr className="price-row-highlight">
-              <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><BoltIcon size={16} /><span>RAPP Guided DIY</span></span></td>
-              <td className="price-val-green">$35 – $80</td>
-              <td>2 – 3 Hours</td>
-              <td>Save up to 90% today with precise guided instructions</td>
+            <tr className="price-row-highlight" style={{ background: 'rgba(249, 115, 22, 0.15)', borderLeft: '4px solid var(--accent-orange)' }}>
+              <td style={{ padding: '14px 16px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#fff', fontWeight: 700 }}>
+                  <BoltIcon size={16} style={{ color: 'var(--accent-yellow)' }} />
+                  <span>RAPP Guided DIY</span>
+                </span>
+              </td>
+              <td className="price-val-green" style={{ padding: '14px 16px', color: '#4ade80', fontWeight: 800 }}>
+                {diagnosis?.cost_breakdown
+                  ? `$${(diagnosis.cost_breakdown.parts_total + 4.00).toFixed(2)}`
+                  : '$39.00'}
+              </td>
+              <td style={{ padding: '14px 16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-yellow)' }}>
+                    {diagnosis?.cost_breakdown
+                      ? `${diagnosis.cost_breakdown.estimated_labor_hours} Hours completion`
+                      : '2 – 3 Hours completion'}
+                  </span>
+                  <span className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: '0.8rem' }}>
+                    Save up to 85% today with exact step-by-step guidance & verified parts (includes $4.00 guide fee)
+                  </span>
+                </div>
+              </td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      {/* ── Post-Repair Garage Vault Sign-Up ── */}
+      <div className="card" style={{ border: '1px solid var(--accent-orange)', marginTop: 24, position: 'relative' }}>
+        <p className="card-label" style={{ color: 'var(--accent-orange)', margin: 0 }}>Secure Garage Archive</p>
+        
+        {garageSaved ? (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <CheckCircleIcon size={18} style={{ color: '#4ade80' }} />
+              <span>This repair guide and vehicle profile are saved to your garage.</span>
+            </div>
+            <a href="/garage" className="btn btn-secondary" style={{ width: 'auto', padding: '0 18px', marginTop: 8 }}>Go to My Garage →</a>
+          </div>
+        ) : !firebaseConfigured ? (
+          <div style={{ marginTop: 10 }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: 4 }}>Save to My Garage &amp; Keep Guide Forever</h3>
+            <p className="text-muted text-sm">Account creation isn&apos;t configured for this environment yet — check back soon.</p>
+          </div>
+        ) : (
+          <div style={{ marginTop: 10 }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: 4 }}>Save to My Garage &amp; Keep Guide Forever</h3>
+            <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
+              Create a free account to permanently archive your vehicle profile, diagnostic guide, and payment preferences.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 380 }}>
+              <input
+                className="input"
+                type="text"
+                placeholder="Name (optional)"
+                value={garageName}
+                onChange={(e) => setGarageName(e.target.value)}
+                style={{ padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+              />
+              <input
+                className="input"
+                type="email"
+                placeholder="Email"
+                value={garageEmail}
+                onChange={(e) => setGarageEmail(e.target.value)}
+                style={{ padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+              />
+              <input
+                className="input"
+                type="password"
+                placeholder="Password"
+                value={garagePassword}
+                onChange={(e) => setGaragePassword(e.target.value)}
+                style={{ padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+              />
+              {garageError && <p style={{ color: 'var(--accent-red)', fontSize: '0.85rem', margin: 0 }}>{garageError}</p>}
+              <button
+                className="btn btn-primary"
+                onClick={handleGarageSignUp}
+                disabled={garageSubmitting || !garageEmail.trim() || !garagePassword.trim()}
+                style={{ marginTop: 6, minHeight: 40 }}
+              >
+                {garageSubmitting ? <><span className="loading-spinner" aria-hidden="true" /> Saving…</> : 'Save to My Garage'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Locked repair steps (hidden by default) ── */}
