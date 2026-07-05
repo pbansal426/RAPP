@@ -1,119 +1,150 @@
+import abc
 import os
-from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
-import structlog
-from google import genai
-from google.genai import types as genai_types
+import time
+from typing import Any
 
-logger = structlog.get_logger()
+import structlog
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
+logger = structlog.get_logger(__name__)
 
 GEMINI_EMBEDDING_MODEL = "text-embedding-004"
 
-class VectorStore(ABC):
-    """
-    Abstract Base Class defining the interface for RAG vector stores.
-    """
 
-    @abstractmethod
-    def add_documents(self, documents: List[Dict[str, Any]]) -> None:
+class VectorStore(abc.ABC):
+    """Abstract interface for our Vector Database layer."""
+
+    @abc.abstractmethod
+    def add_documents(self, documents: list[dict[str, Any]]) -> None:
         """
-        Add a list of documents to the vector store.
-
-        Parameters:
-        -----------
-        documents : List[Dict[str, Any]]
-            A list of document dictionaries, where each document has the format:
-            {
-                "id": str,
-                "text": str,
-                "metadata": Dict[str, Any]
-            }
+        Ingest documents. Format:
+        [
+            {"id": "doc_id_1", "text": "Raw text content", "metadata": {"year": 2010...}},
+            ...
+        ]
         """
         pass
 
-    @abstractmethod
+    @abc.abstractmethod
     def search(
-        self, 
-        query: str, 
-        filter_metadata: Optional[Dict[str, Any]] = None, 
-        k: int = 5
-    ) -> List[Dict[str, Any]]:
+        self, query: str, filter_metadata: dict[str, Any] | None = None, k: int = 5
+    ) -> list[dict[str, Any]]:
         """
-        Search for the top k documents matching the query, optionally filtered by metadata.
-
-        Parameters:
-        -----------
-        query : str
-            The search query.
-        filter_metadata : Optional[Dict[str, Any]]
-            A dictionary containing key-value metadata pairs to filter by.
-        k : int
-            The number of results to return.
-
+        Search documents returning k nearest neighbors based on semantic query.
         Returns:
-        --------
-        List[Dict[str, Any]]
-            A list of matching documents, each structured as:
-            {
-                "id": str,
-                "text": str,
-                "metadata": Dict[str, Any],
-                "distance": float
-            }
+        [
+            {"id": "doc_1", "text": "...", "metadata": {}, "distance": 0.23},
+            ...
+        ]
         """
         pass
 
 
 class ChromaVectorStore(VectorStore):
     """
-    ChromaDB implementation of the VectorStore interface with Gemini embeddings.
-    Encapsulates all chromadb imports and client logic.
+    Implementation using ChromaDB with automatic local persistence and Gemini Embeddings.
     """
 
     def __init__(
-        self, 
-        persistent_path: Optional[str] = None, 
+        self,
+        persistent_path: str | None = "./data/chroma_db",
         collection_name: str = "repair_manuals",
-        use_gemini_embeddings: bool = True
-    ):
-        """
-        Initialize the ChromaVectorStore client.
-        
-        Parameters:
-        -----------
-        persistent_path : Optional[str]
-            Path to persistent directory. If None, runs an ephemeral client.
-        collection_name : str
-            Name of the collection to use.
-        use_gemini_embeddings : bool
-            Whether to use Gemini embeddings instead of default ChromaDB embeddings.
-        """
-        import chromadb  # Confined import
+    ) -> None:
+        try:
+            import chromadb
+            from chromadb.config import Settings
+        except ImportError as err:
+            raise ImportError(
+                "chromadb is not installed. Please install it using `pip install chromadb`"
+            ) from err
 
-        self.collection_name = collection_name
-        self.use_gemini_embeddings = use_gemini_embeddings
-        
         if persistent_path:
-            os.makedirs(persistent_path, exist_ok=True)
-            self.client = chromadb.PersistentClient(path=persistent_path)
+            self.client = chromadb.PersistentClient(
+                path=persistent_path, settings=Settings(anonymized_telemetry=False)
+            )
         else:
-            self.client = chromadb.EphemeralClient()
-            
-        # Initialize Gemini client if using Gemini embeddings
-        self.genai_client = None
-        if self.use_gemini_embeddings:
-            try:
-                self.genai_client = genai.Client()
-                logger.info("Gemini embeddings initialized for vector store")
-            except Exception as e:
-                logger.warning("Failed to initialize Gemini client, falling back to default embeddings", error=str(e))
-                self.use_gemini_embeddings = False
-        
-        self.collection = self.client.get_or_create_collection(name=collection_name)
+            self.client = chromadb.EphemeralClient(
+                settings=Settings(anonymized_telemetry=False)
+            )
 
-    def add_documents(self, documents: List[Dict[str, Any]]) -> None:
+        # Initialize Gemini Client if API key is present
+        self.use_gemini_embeddings = (
+            os.environ.get("USE_GEMINI_EMBEDDINGS", "true").lower() == "true"
+        )
+        self.genai_client: Any = None
+        self.genai_types: Any = None
+
+        if self.use_gemini_embeddings:
+            gemini_api_key = os.environ.get("GEMINI_API_KEY")
+            if not gemini_api_key:
+                logger.warning(
+                    "USE_GEMINI_EMBEDDINGS is true but GEMINI_API_KEY is not set. Falling back to default embeddings."
+                )
+                self.use_gemini_embeddings = False
+            else:
+                try:
+                    from google import genai
+                    from google.genai import types as genai_types
+
+                    self.genai_client = genai.Client(api_key=gemini_api_key)
+                    self.genai_types = genai_types
+                    logger.info("Gemini embeddings initialized for vector store")
+                except Exception as e:
+                    logger.warning(
+                        "Failed to initialize Gemini client, falling back to default embeddings",
+                        error=str(e),
+                    )
+                    self.use_gemini_embeddings = False
+
+        self.collection: Any = self.client.get_or_create_collection(name=collection_name)
+
+    @retry(
+        retry=retry_if_exception_type(Exception),
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True,
+    )
+    def _embed_texts_with_retry(
+        self, texts: list[str], task_type: str
+    ) -> list[list[float]]:
+        response = self.genai_client.models.embed_content(
+            model=GEMINI_EMBEDDING_MODEL,
+            contents=texts,
+            config=self.genai_types.EmbedContentConfig(
+                task_type=task_type,
+            ),
+        )
+        return [e.values for e in response.embeddings]
+
+    def _embed_texts(self, texts: list[str], task_type: str) -> list[list[float]]:
+        """Generate embeddings using Gemini text-embedding-004 in batches."""
+        if not self.use_gemini_embeddings or not self.genai_client:
+            raise ValueError("Gemini embeddings are not configured.")
+
+        batch_size = 100
+        all_embeddings = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            try:
+                embeddings = self._embed_texts_with_retry(batch, task_type)
+                all_embeddings.extend(embeddings)
+                time.sleep(0.5)  # Slight sleep to respect rate limits
+            except Exception as e:
+                logger.error(
+                    f"Failed to generate Gemini embeddings for batch {i//batch_size}",
+                    error=str(e),
+                )
+                raise
+        return all_embeddings
+
+    def add_documents(self, documents: list[dict[str, Any]]) -> None:
         """
-        Adds flat documents and handles ChromaDB metadata serialization limits.
+        Adds or upserts flat documents and handles ChromaDB metadata serialization limits.
         Uses Gemini embeddings if configured.
         """
         if not documents:
@@ -127,16 +158,7 @@ class ChromaVectorStore(VectorStore):
         for doc in documents:
             ids.append(doc["id"])
             texts.append(doc["text"])
-            
-            # Generate embeddings using Gemini if configured
-            if self.use_gemini_embeddings and self.genai_client:
-                try:
-                    embedding = self._generate_gemini_embedding(doc["text"])
-                    embeddings.append(embedding)
-                except Exception as e:
-                    logger.warning(f"Failed to generate Gemini embedding for {doc['id']}, using default", error=str(e))
-                    embeddings.append(None)
-            
+
             # ChromaDB metadata must have flat types (str, int, float, bool)
             flat_metadata = {}
             for k, v in doc.get("metadata", {}).items():
@@ -144,9 +166,11 @@ class ChromaVectorStore(VectorStore):
                     if isinstance(v, str):
                         v = v.upper()
                     elif isinstance(v, list):
-                        v = [val.upper() if isinstance(val, str) else val for val in v]
-                
-                if isinstance(v, (str, int, float, bool)):
+                        v = [
+                            val.upper() if isinstance(val, str) else val for val in v
+                        ]
+
+                if isinstance(v, str | int | float | bool):
                     flat_metadata[k] = v
                 elif isinstance(v, list):
                     flat_metadata[k] = ",".join(map(str, v))
@@ -156,27 +180,21 @@ class ChromaVectorStore(VectorStore):
                     flat_metadata[k] = str(v)
             metadatas.append(flat_metadata)
 
-        # Add documents with or without pre-computed embeddings
-        if self.use_gemini_embeddings and all(e is not None for e in embeddings):
-            self.collection.add(
-                ids=ids,
-                documents=texts,
-                metadatas=metadatas,
-                embeddings=embeddings
+        # Generate embeddings using Gemini if configured
+        if self.use_gemini_embeddings and self.genai_client:
+            embeddings = self._embed_texts(texts, task_type="RETRIEVAL_DOCUMENT")
+
+        # Upsert documents with or without pre-computed embeddings
+        if self.use_gemini_embeddings and embeddings:
+            self.collection.upsert(
+                ids=ids, documents=texts, metadatas=metadatas, embeddings=embeddings
             )
         else:
-            self.collection.add(
-                ids=ids,
-                documents=texts,
-                metadatas=metadatas
-            )
+            self.collection.upsert(ids=ids, documents=texts, metadatas=metadatas)
 
     def search(
-        self, 
-        query: str, 
-        filter_metadata: Optional[Dict[str, Any]] = None, 
-        k: int = 5
-    ) -> List[Dict[str, Any]]:
+        self, query: str, filter_metadata: dict[str, Any] | None = None, k: int = 5
+    ) -> list[dict[str, Any]]:
         """
         Queries ChromaDB collection, constructing filters dynamically.
         Uses Gemini embeddings for query if configured.
@@ -189,7 +207,7 @@ class ChromaVectorStore(VectorStore):
         if count == 0:
             return []
 
-        where_clause = None
+        where_clause: Any = None
         if filter_metadata:
             normalized_filters = {}
             for key, value in filter_metadata.items():
@@ -205,11 +223,11 @@ class ChromaVectorStore(VectorStore):
                 if value is not None:
                     if isinstance(value, list):
                         value = ",".join(map(str, value))
-                    if isinstance(value, (str, int, float, bool)):
+                    if isinstance(value, str | int | float | bool):
                         filter_conditions.append({key: {"$eq": value}})
                     else:
                         filter_conditions.append({key: {"$eq": str(value)}})
-            
+
             if len(filter_conditions) == 1:
                 where_clause = filter_conditions[0]
             elif len(filter_conditions) > 1:
@@ -217,28 +235,26 @@ class ChromaVectorStore(VectorStore):
 
         try:
             n_results = min(k, count)
-            
+
             # Use Gemini embeddings for query if configured
             if self.use_gemini_embeddings and self.genai_client:
                 try:
-                    query_embedding = self._generate_gemini_embedding(query)
+                    query_embeddings = self._embed_texts(
+                        [query], task_type="RETRIEVAL_QUERY"
+                    )
                     results = self.collection.query(
-                        query_embeddings=[query_embedding],
+                        query_embeddings=query_embeddings,
                         n_results=n_results,
-                        where=where_clause
+                        where=where_clause,
                     )
                 except Exception as e:
-                    logger.warning("Gemini query embedding failed, falling back to default", error=str(e))
-                    results = self.collection.query(
-                        query_texts=[query],
-                        n_results=n_results,
-                        where=where_clause
-                    )
+                    logger.error("Gemini query embedding failed.", error=str(e))
+                    raise
             else:
                 results = self.collection.query(
                     query_texts=[query],
                     n_results=n_results,
-                    where=where_clause
+                    where=where_clause,
                 )
         except Exception as e:
             logger.warning("ChromaDB query failed", error=str(e))
@@ -254,43 +270,34 @@ class ChromaVectorStore(VectorStore):
             for idx in range(len(docs)):
                 doc_id = ids[idx] if idx < len(ids) else f"unknown_{idx}"
                 doc_text = docs[idx]
-                doc_meta = metadatas[idx] if idx < len(metadatas) and metadatas[idx] is not None else {}
+                doc_meta = (
+                    metadatas[idx]
+                    if idx < len(metadatas) and metadatas[idx] is not None
+                    else {}
+                )
                 doc_dist = distances[idx] if idx < len(distances) else 0.0
-                formatted_results.append({
-                    "id": doc_id,
-                    "text": doc_text,
-                    "metadata": doc_meta,
-                    "distance": doc_dist
-                })
+                formatted_results.append(
+                    {
+                        "id": doc_id,
+                        "text": doc_text,
+                        "metadata": doc_meta,
+                        "distance": doc_dist,
+                    }
+                )
 
         return formatted_results
-    
-    def _generate_gemini_embedding(self, text: str) -> List[float]:
-        """Generate embedding using Gemini text-embedding-004."""
-        try:
-            response = self.genai_client.models.embed_content(
-                model=GEMINI_EMBEDDING_MODEL,
-                content=text,
-                config=genai_types.EmbedContentConfig(
-                    task_type="retrieval_document",
-                )
-            )
-            return response.embedding.values
-        except Exception as e:
-            logger.error("Failed to generate Gemini embedding", error=str(e))
-            raise
 
 
 class MockVectorStore(VectorStore):
     """
-    A lightweight, in-memory Mock Vector Store designed for unit tests 
+    A lightweight, in-memory Mock Vector Store designed for unit tests
     and offline development without chromadb dependencies.
     """
 
-    def __init__(self):
-        self.documents: List[Dict[str, Any]] = []
+    def __init__(self) -> None:
+        self.documents: list[dict[str, Any]] = []
 
-    def add_documents(self, documents: List[Dict[str, Any]]) -> None:
+    def add_documents(self, documents: list[dict[str, Any]]) -> None:
         for doc in documents:
             flat_metadata = {}
             for k, v in doc.get("metadata", {}).items():
@@ -298,9 +305,11 @@ class MockVectorStore(VectorStore):
                     if isinstance(v, str):
                         v = v.upper()
                     elif isinstance(v, list):
-                        v = [val.upper() if isinstance(val, str) else val for val in v]
-                
-                if isinstance(v, (str, int, float, bool)):
+                        v = [
+                            val.upper() if isinstance(val, str) else val for val in v
+                        ]
+
+                if isinstance(v, str | int | float | bool):
                     flat_metadata[k] = v
                 elif isinstance(v, list):
                     flat_metadata[k] = ",".join(map(str, v))
@@ -308,18 +317,22 @@ class MockVectorStore(VectorStore):
                     continue
                 else:
                     flat_metadata[k] = str(v)
-            self.documents.append({
-                "id": doc["id"],
-                "text": doc["text"],
-                "metadata": flat_metadata
-            })
+
+            new_doc = {"id": doc["id"], "text": doc["text"], "metadata": flat_metadata}
+
+            # Upsert behavior: replace if ID exists
+            existing_idx = next(
+                (i for i, d in enumerate(self.documents) if d["id"] == new_doc["id"]),
+                None,
+            )
+            if existing_idx is not None:
+                self.documents[existing_idx] = new_doc
+            else:
+                self.documents.append(new_doc)
 
     def search(
-        self, 
-        query: str, 
-        filter_metadata: Optional[Dict[str, Any]] = None, 
-        k: int = 5
-    ) -> List[Dict[str, Any]]:
+        self, query: str, filter_metadata: dict[str, Any] | None = None, k: int = 5
+    ) -> list[dict[str, Any]]:
         filtered_docs = []
 
         # 1. Filter by metadata values
@@ -341,24 +354,28 @@ class MockVectorStore(VectorStore):
         # 2. Score text matching by word overlap
         def clean_word(w: str) -> str:
             return w.strip(".,!?;;:")
-            
+
         query_words = {clean_word(w) for w in query.lower().split() if clean_word(w)}
         scored_docs = []
         for doc in filtered_docs:
-            doc_words = {clean_word(w) for w in doc["text"].lower().split() if clean_word(w)}
+            doc_words = {
+                clean_word(w) for w in doc["text"].lower().split() if clean_word(w)
+            }
             overlap = len(query_words.intersection(doc_words))
             # Distance mapping: higher overlap = lower distance
             distance = 1.0 / (1.0 + overlap)
             scored_docs.append((distance, doc))
 
         scored_docs.sort(key=lambda x: x[0])
-        
+
         results = []
         for dist, doc in scored_docs[:k]:
-            results.append({
-                "id": doc["id"],
-                "text": doc["text"],
-                "metadata": doc["metadata"],
-                "distance": dist
-            })
+            results.append(
+                {
+                    "id": doc["id"],
+                    "text": doc["text"],
+                    "metadata": doc["metadata"],
+                    "distance": dist,
+                }
+            )
         return results

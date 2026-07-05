@@ -93,6 +93,6 @@ async def diagnose(request: DiagnoseRequest) -> DiagnoseResponse:
         is_high_risk=is_high_risk,
         high_risk_system=high_risk_system,
         warning_message=warning_message,
-        recommended_parts=build_recommended_parts(template, vehicle_desc),
-        cost_breakdown=build_cost_breakdown(template),
+        recommended_parts=build_recommended_parts(template, vehicle_desc), # type: ignore
+        cost_breakdown=build_cost_breakdown(template), # type: ignore
     )

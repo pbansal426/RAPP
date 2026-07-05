@@ -1,40 +1,32 @@
 import os
-import threading
-from typing import Optional
-from backend.rag.vector_store import VectorStore, ChromaVectorStore, MockVectorStore
 
-_vector_store_instance: Optional[VectorStore] = None
-_vector_store_lock = threading.Lock()
+from backend.rag.retriever import retrieve
+from backend.rag.vector_store import ChromaVectorStore, MockVectorStore, VectorStore
+
+# We maintain a singleton instance of the vector store to avoid re-initializing
+# ChromaDB connection pools on every request.
+_vector_store_instance: VectorStore | None = None
 
 def get_vector_store() -> VectorStore:
     """
-    Factory function producing a singleton instance of the configured vector store backend.
+    Get or create the singleton VectorStore instance.
+
+    Returns:
+        VectorStore: The active vector store implementation.
     """
     global _vector_store_instance
+
     if _vector_store_instance is None:
-        with _vector_store_lock:
-            if _vector_store_instance is None:
-                store_type = os.getenv("VECTOR_STORE", "chromadb").lower()
-                if store_type == "chromadb":
-                    persistent_path = os.getenv("CHROMA_DB_PATH", "./data/chroma_db")
-                    use_gemini = os.getenv("USE_GEMINI_EMBEDDINGS", "true").lower() == "true"
-                    _vector_store_instance = ChromaVectorStore(
-                        persistent_path=persistent_path,
-                        use_gemini_embeddings=use_gemini
-                    )
-                elif store_type == "mock":
-                    _vector_store_instance = MockVectorStore()
-                else:
-                    raise ValueError(f"Unsupported VECTOR_STORE backend type: '{store_type}'")
+        store_type = os.environ.get("VECTOR_STORE", "chroma").lower()
+        if store_type == "mock":
+            _vector_store_instance = MockVectorStore()
+        else:
+            db_path = os.environ.get("CHROMA_DB_PATH", "./data/chroma_db")
+            _vector_store_instance = ChromaVectorStore(
+                persistent_path=db_path,
+                collection_name="repair_manuals"
+            )
+
     return _vector_store_instance
 
-# Delayed import to avoid circular imports during module load
-from backend.rag.retriever import retrieve
-
-__all__ = [
-    "VectorStore",
-    "ChromaVectorStore",
-    "MockVectorStore",
-    "get_vector_store",
-    "retrieve"
-]
+__all__ = ["retrieve", "get_vector_store", "VectorStore"]

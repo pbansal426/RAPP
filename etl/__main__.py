@@ -12,12 +12,18 @@ import logging
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from etl.config import EtlConfig
 from etl.load.audit import print_audit_log
+from etl.load.manifest import IngestManifest
 from etl.models import VehicleKey
-from etl.pipeline import PipelineError, run_vertical_slice
+from etl.pipeline import PipelineError, run_full_ingest, run_vertical_slice
 
 log = logging.getLogger(__name__)
+
+# Load environment variables early so vector store and other components see them.
+load_dotenv()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -35,6 +41,16 @@ def main(argv: list[str] | None = None) -> int:
         help="override the PDF download directory (default: data/etl_workspace)",
     )
     parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Run full ingestion on all TSBs for the vehicle instead of the vertical slice",
+    )
+    parser.add_argument(
+        "--load",
+        action="store_true",
+        help="Load the extracted documents into the vector store. Required when using --all.",
+    )
     args = parser.parse_args(argv)
 
     # Progress goes to stderr so the audit log on stdout stays pipeable.
@@ -49,13 +65,32 @@ def main(argv: list[str] | None = None) -> int:
         config = dataclasses.replace(config, workspace_dir=args.workspace)
     vehicle = VehicleKey(year=args.year, make=args.make, model=args.model)
 
-    try:
-        result = run_vertical_slice(vehicle, config)
-    except PipelineError as exc:
-        log.error("pipeline failed: %s", exc)
-        return 1
+    if args.all:
+        log.info(f"Starting full ingest for {vehicle}")
+        manifest_path = config.workspace_dir / "ingest_manifest.json"
+        manifest = IngestManifest(str(manifest_path))
+        try:
+            summary = run_full_ingest(vehicle, config, manifest, load=args.load)
+            log.info("--- Ingestion Summary ---")
+            log.info(f"Vehicle: {summary.vehicle}")
+            log.info(f"Records found: {summary.records_found}")
+            log.info(f"PDFs ingested: {summary.pdfs_ingested}")
+            log.info(f"PDFs skipped (no text): {summary.pdfs_skipped_no_text}")
+            log.info(f"PDFs failed: {summary.pdfs_failed}")
+            log.info(f"Chunks loaded: {summary.chunks_loaded}")
+        except PipelineError as exc:
+            log.error("pipeline failed: %s", exc)
+            return 1
+    else:
+        log.info(f"Starting vertical slice for {vehicle}")
+        try:
+            result = run_vertical_slice(vehicle, config)
+        except PipelineError as exc:
+            log.error("pipeline failed: %s", exc)
+            return 1
 
-    print_audit_log(result)
+        print_audit_log(result)
+
     return 0
 
 
