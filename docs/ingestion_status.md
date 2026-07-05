@@ -1,0 +1,38 @@
+# NHTSA TSB Ingestion Status
+
+Tracks progress of `python -m etl --all --load` runs into the local ChromaDB
+store (`data/chroma_db`, gitignored — this file is the durable record of
+what's been ingested). Vehicle list is the 8 make/model combos the app
+actually supports today (`tests/mock_app.py`'s YMM cascade / synthetic-VIN
+map); Corolla and the 2014–16 Highlander XLE are the two the E2E suite
+exercises directly (see CLAUDE.md), so those are top priority.
+
+| Year | Make | Model | Status | Records Found | PDFs Ingested | PDFs Skipped (no text) | PDFs Failed | Chunks Loaded | Last Updated |
+|------|------|-------|--------|---------------:|---------------:|------------------------:|------------:|---------------:|--------------|
+| 2010 | Toyota | Corolla | ✅ Done | 396 | 299 | 87 | 0 | 2433 | 2026-07-05 |
+| 2015 | Toyota | Highlander | ✅ Done (re-ingested with manifest fix) | 318 | 255 | 52 | 0 | 2122 | 2026-07-05 |
+| 2018 | Honda | Civic | ✅ Done | 231 | 224 | 7 | 0 | 866 | 2026-07-05 |
+| 2018 | Honda | Accord | ✅ Done | 297 | 291 | 6 | 0 | 760 | 2026-07-05 |
+| 2018 | Toyota | Camry | ✅ Done | 374 | 367 | 7 | 0 | 2679 | 2026-07-05 |
+| 2018 | Ford | F-150 | ✅ Done | 389 | 389 | 0 | 0 | 1702 | 2026-07-05 |
+| 2025 | Lexus | ES (300h) | ✅ Done — NHTSA models this as just "ES", "300h" is a trim not a model name | 32 | 32 | 0 | 0 | 216 | 2026-07-05 |
+
+**Queue complete.** All planned vehicles for this manual/local phase are done: Corolla, Highlander, Civic, Accord, Camry, F-150, ES. Next phase is Google Jules (see docs/jules_ingestion_runbook.md once written).
+
+Queue ends here per user request 2026-07-05 — RX350, Silverado, RAV4, CR-V, and Explorer have been dropped, not deferred. Only F-150 and ES300h remain after Camry finishes.
+
+## Live progress
+
+Watch the current ingestion run update live, from your own terminal, no need to check in with Claude:
+
+```bash
+watch -n 2 'cd /Users/prathambansal/Dev/RAPP/.claude/worktrees/generic-dancing-blum && uv run python -m etl.progress_view'
+```
+
+## Notes
+
+- "Records Found" = distinct NHTSA manufacturer-communication records for that vehicle; not every record has an attached PDF (some are recalls/other communication types with no document, which are skipped in the audit rather than counted as failures).
+- Year picked for still-queued vehicles will follow the same logic as Highlander: match whatever model year range the frontend/E2E suite actually cares about, defaulting to a recent common year otherwise.
+- **2026-07-05 fix:** the manifest used to dedupe already-ingested PDFs was keyed globally (`nhtsa_id/file_name`), not per-vehicle. Since NHTSA bulletins are frequently shared across models, this meant a shared TSB got tagged with whichever vehicle's run processed it first, and every subsequent vehicle silently skipped ingesting it (so it never got that vehicle's own make/model metadata tag, and could never be retrieved for it). Fixed in `etl/load/manifest.py` — keys are now scoped per-vehicle. Corolla ran first against an empty manifest so it was unaffected; Highlander's original run was potentially under-ingested and was reset + re-run after the fix (manifest keys from before this fix are incompatible with the new scheme, so the whole manifest was cleared).
+- Re-running ingestion for a vehicle already marked Done: use `--reset-vehicle` (clears just that vehicle's manifest entries, e.g. `python -m etl --year 2010 --make Toyota --model Corolla --reset-vehicle --all --load`) rather than deleting the whole manifest file.
+- Two `--all --load` runs must never target the same `data/chroma_db`/workspace concurrently — `run_full_ingest` now takes an advisory file lock and will raise `PipelineLockedError` instead of corrupting state if you try.

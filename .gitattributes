@@ -1,0 +1,8 @@
+# kb_export/ is the ONLY place the ingested knowledge-base vector store
+# gets committed -- data/chroma_db itself is a symlink to SSD-hosted
+# storage and gitignored (git can't track files inside a symlinked
+# directory anyway). Publish a snapshot into kb_export/ via
+# etl/export_kb.py before committing. See docs/jules_ingestion_runbook.md.
+kb_export/**/*.sqlite3 filter=lfs diff=lfs merge=lfs -text
+kb_export/**/*.bin filter=lfs diff=lfs merge=lfs -text
+kb_export/**/*.pickle filter=lfs diff=lfs merge=lfs -text

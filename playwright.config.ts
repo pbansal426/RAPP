@@ -12,6 +12,12 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests',
+  /* tests/e2e-real-backend-smoke.spec.ts targets the REAL backend/frontend
+   * and has its own config (playwright.real-backend.config.ts) + CI job
+   * (`e2e-real-backend`). Exclude it here so it's never picked up by this
+   * default config -- used by tests/verify_tests.sh and the `e2e-tests` CI
+   * job, both of which run tests/mock_app.py, not the real backend. */
+  testIgnore: ['**/e2e-real-backend-smoke.spec.ts'],
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */

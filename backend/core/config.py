@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     port: int = 8000
     host: str = "127.0.0.1"
 
+    # Environment: "development" (default), "test", or "production". Used to
+    # force mock VectorStore/Gemini behavior so CI/test runs never dial out
+    # over the network, regardless of what secrets happen to be present.
+    environment: str = "development"
+
     # API endpoints and URLs
     nhtsa_base_url: str = "https://vpic.nhtsa.dot.gov/api/vehicles"
     frontend_url: str = "http://localhost:3000"
@@ -47,6 +52,15 @@ class Settings(BaseSettings):
     # always set a real secret via the environment in any deployed environment.
     database_url: str | None = None
     jwt_secret_key: str = "supersecretkeyforlocaldev"
+
+    @property
+    def is_test_mode(self) -> bool:
+        """True in CI or explicit test runs. Callers use this to force mock
+        VectorStore/Gemini behavior so no live network call happens even if
+        GEMINI_API_KEY or a real VECTOR_STORE value is set in the environment."""
+        import os
+
+        return self.environment == "test" or os.environ.get("CI", "").lower() == "true"
 
 
 settings = Settings()

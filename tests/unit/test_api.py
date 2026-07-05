@@ -208,6 +208,46 @@ def test_diagnose_gemini_enhancement(client, monkeypatch):
     mock_generate_content.assert_called_once()
     assert mock_generate_content.call_args.kwargs["model"] == "gemini-3.5-flash"
 
+@patch("backend.rag.retriever.retrieve")
+def test_diagnose_gemini_enhancement_grounded_with_vehicle(mock_retrieve, client, monkeypatch):
+    """When the request includes vehicle info and RAG finds real OEM text,
+    the diagnosis summary must be generated from that grounded prompt (not
+    the plain ungrounded one) -- see generate_diagnosis_summary."""
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+    mock_retrieve.return_value = [
+        {
+            "id": "doc_1",
+            "text": "Brake pad wear sensor contact indicates pad replacement is due.",
+            "metadata": {"bulletin_number": "T-SB-9999-20", "source_url": "http://example.com/x.pdf"},
+            "distance": 0.05,
+        }
+    ]
+
+    mock_response = MagicMock()
+    mock_response.text = "Grounded summary from real TSB text."
+    mock_generate_content = AsyncMock(return_value=mock_response)
+
+    with patch("backend.services.gemini.get_genai_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = mock_generate_content
+        mock_get_client.return_value = mock_client
+
+        payload = {
+            "vin": "1HGBH41JXMN109186",
+            "symptoms": "Squeaking sound when braking",
+            "obd_codes": "P0101",
+            "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
+        }
+        response = client.post("/api/diagnose", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["summary"] == "Grounded summary from real TSB text."
+    mock_generate_content.assert_called_once()
+    config = mock_generate_content.call_args.kwargs["config"]
+    assert "ONLY on" in config.system_instruction
+    assert "Brake pad wear sensor" in mock_generate_content.call_args.kwargs["contents"]
+
+
 def test_diagnose_gemini_failure_falls_back_to_default_summary(client, monkeypatch):
     monkeypatch.setattr(settings, "gemini_api_key", "test-key")
 
@@ -335,11 +375,18 @@ def test_repair_fallback(mock_retrieve, mock_get, client):
     assert response.status_code == 200
     data = response.json()
     assert "Disconnect negative battery terminal." in data["repair_steps"]
-    assert "Honda Civic ESM 2016-2021 Section 12-4" in data["citations"]
+    # No vehicle-specific source was found, so the citation must not name a
+    # real (and, worse, mismatched) OEM manual -- see backend/services/llm.py
+    # generate_repair_procedure's zero-hit fallback.
+    assert len(data["citations"]) == 1
+    assert "no vehicle-specific" in data["citations"][0].lower()
+    assert "ESM" not in data["citations"][0]
 
 @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
 @patch("backend.rag.retriever.retrieve")
 def test_repair_gemini_structured_steps(mock_retrieve, mock_get, client, monkeypatch):
+    # Grounded generation only runs when RAG actually returned OEM text --
+    # a zero-hit query skips Gemini entirely (see test_repair_fallback).
     from backend.services.gemini import RepairStep, RepairStepsSchema
 
     monkeypatch.setattr(settings, "gemini_api_key", "test-key")
@@ -347,7 +394,14 @@ def test_repair_gemini_structured_steps(mock_retrieve, mock_get, client, monkeyp
     mock_decode_resp.status_code = 200
     mock_decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
     mock_get.return_value = mock_decode_resp
-    mock_retrieve.return_value = []
+    mock_retrieve.return_value = [
+        {
+            "id": "doc_test_1",
+            "text": "Loosen the spark plug using standard spark plug socket.",
+            "metadata": {"citation": "Honda Civic Service Manual 2018 Section 5"},
+            "distance": 0.1,
+        }
+    ]
 
     mock_response = MagicMock()
     mock_response.parsed = RepairStepsSchema(
@@ -365,7 +419,7 @@ def test_repair_gemini_structured_steps(mock_retrieve, mock_get, client, monkeyp
 
         payload = {
             "vin": "1HGBH41JXMN109186",
-            "symptoms": "Unknown weird noise",
+            "symptoms": "spark plug replacement",
             "stripe_session_id": "cs_test_123",
         }
         response = client.post("/api/repair", json=payload)
@@ -376,6 +430,7 @@ def test_repair_gemini_structured_steps(mock_retrieve, mock_get, client, monkeyp
         "Disconnect the negative battery terminal.",
         "Torque the mounting bolt to 7.5 ft-lbs.",
     ]
+    assert data["citations"] == ["Honda Civic Service Manual 2018 Section 5"]
     assert mock_generate_content.call_args.kwargs["model"] == "gemini-3.5-flash"
     config = mock_generate_content.call_args.kwargs["config"]
     assert config.response_schema is RepairStepsSchema
@@ -517,6 +572,54 @@ def test_diagnose_no_template_match_has_empty_parts(client):
     assert data["cost_breakdown"]["diy_total"] == 4.00
 
 
+@patch("backend.rag.retriever.retrieve")
+def test_diagnose_disambiguates_drum_brakes_from_retrieved_text(mock_retrieve, client):
+    """A generic 'grinding/squealing brakes' symptom keyword-matches the
+    disc-brake (pad/rotor) template by default -- but if this vehicle's real
+    retrieved OEM text describes a drum-brake job, the parts list must not
+    recommend pads/rotors for a shoe/drum repair. See refine_brake_category."""
+    mock_retrieve.return_value = [
+        {
+            "id": "doc_1",
+            "text": "Remove the brake shoe hold down springs and inspect the wheel cylinder before replacing the drum brake shoes.",
+            "metadata": {"bulletin_number": "T-SB-0235-12"},
+            "distance": 0.05,
+        }
+    ]
+
+    payload = {
+        "vin": "1HGBH41JXMN109186",
+        "symptoms": "Grinding and squealing noise from the brakes when slowing down",
+        "obd_codes": [],
+        "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
+    }
+    response = client.post("/api/diagnose", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    part_names = [p["part_name"] for p in data["recommended_parts"]]
+    assert any("shoe" in n.lower() for n in part_names)
+    assert not any("rotor" in n.lower() for n in part_names)
+
+
+@patch("backend.rag.retriever.retrieve")
+def test_diagnose_keeps_disc_brakes_when_no_drum_signal(mock_retrieve, client):
+    """No RAG hits (or no drum-specific terms in what's retrieved) means the
+    default keyword-matched disc-brake template is left alone."""
+    mock_retrieve.return_value = []
+
+    payload = {
+        "vin": "1HGBH41JXMN109186",
+        "symptoms": "Grinding and squealing noise from the brakes when slowing down",
+        "obd_codes": [],
+        "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
+    }
+    response = client.post("/api/diagnose", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    part_names = [p["part_name"] for p in data["recommended_parts"]]
+    assert any("rotor" in n.lower() for n in part_names)
+
+
 # --- VIN photo OCR (/api/vin/ocr) ---
 
 def test_vin_ocr_rejects_unsupported_content_type(client):
@@ -606,4 +709,63 @@ def test_sanitize_and_check_digit_helpers():
     # 1HGBH41JXMN109186 is a real, check-digit-valid Honda VIN.
     assert _vin_check_digit_valid("1HGBH41JXMN109186") is True
     assert _vin_check_digit_valid("1HGBH41JXMN109187") is False
+
+
+def test_repair_chat_requires_payment(client):
+    payload = {
+        "vin": "1HGBH41JXMN109186",
+        "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
+        "symptoms": "squeaking brakes",
+        "repair_steps": ["Torque the caliper bolts to 25 ft-lbs."],
+        "message": "what socket do I need?",
+        "stripe_session_id": "",
+    }
+    response = client.post("/api/repair/chat", json=payload)
+    assert response.status_code == 402
+
+
+def test_repair_chat_grounded_reply(client, monkeypatch):
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+
+    mock_response = MagicMock()
+    mock_response.text = "Use a 14mm socket, per the procedure above."
+    mock_generate_content = AsyncMock(return_value=mock_response)
+
+    with patch("backend.services.gemini.get_genai_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = mock_generate_content
+        mock_get_client.return_value = mock_client
+
+        payload = {
+            "vin": "1HGBH41JXMN109186",
+            "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
+            "symptoms": "squeaking brakes",
+            "repair_steps": ["Use a 14mm socket to remove the caliper slide pin bolts."],
+            "message": "what socket do I need?",
+            "stripe_session_id": "cs_test_123",
+        }
+        response = client.post("/api/repair/chat", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["reply"] == "Use a 14mm socket, per the procedure above."
+    mock_generate_content.assert_called_once()
+    config = mock_generate_content.call_args.kwargs["config"]
+    assert "ONLY using the repair procedure" in config.system_instruction
+    assert "14mm socket" in mock_generate_content.call_args.kwargs["contents"]
+
+
+def test_repair_chat_no_key_returns_none_reply(client, monkeypatch):
+    monkeypatch.setattr(settings, "gemini_api_key", None)
+
+    payload = {
+        "vin": "1HGBH41JXMN109186",
+        "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
+        "symptoms": "squeaking brakes",
+        "repair_steps": ["Torque the caliper bolts to 25 ft-lbs."],
+        "message": "what socket do I need?",
+        "stripe_session_id": "cs_test_123",
+    }
+    response = client.post("/api/repair/chat", json=payload)
+    assert response.status_code == 200
+    assert response.json()["reply"] is None
 
