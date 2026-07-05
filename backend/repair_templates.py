@@ -1,7 +1,7 @@
 """Curated repair-procedure templates, keyed by OBD-II code or symptom keyword.
 
-Used as the middle rung of the repair-content ladder: OpenAI (when
-``OPENAI_API_KEY`` is set) produces the most tailored steps, RAG retrieval is
+Used as the middle rung of the repair-content ladder: Gemini (when
+``GEMINI_API_KEY`` is set) produces the most tailored steps, RAG retrieval is
 tried next, and this module is the deterministic, zero-cost fallback below
 that — real, followable procedures rather than the old generic 10-step
 placeholder. See ``select_template`` for the matching logic.

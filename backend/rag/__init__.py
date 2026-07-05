@@ -17,7 +17,11 @@ def get_vector_store() -> VectorStore:
                 store_type = os.getenv("VECTOR_STORE", "chromadb").lower()
                 if store_type == "chromadb":
                     persistent_path = os.getenv("CHROMA_DB_PATH", "./data/chroma_db")
-                    _vector_store_instance = ChromaVectorStore(persistent_path=persistent_path)
+                    use_gemini = os.getenv("USE_GEMINI_EMBEDDINGS", "true").lower() == "true"
+                    _vector_store_instance = ChromaVectorStore(
+                        persistent_path=persistent_path,
+                        use_gemini_embeddings=use_gemini
+                    )
                 elif store_type == "mock":
                     _vector_store_instance = MockVectorStore()
                 else:

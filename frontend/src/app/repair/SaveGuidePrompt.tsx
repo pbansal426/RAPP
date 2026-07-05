@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { signUp } from '@/lib/auth';
 import { saveRepair } from '@/lib/repairs';
-import { isFirebaseConfigured } from '@/lib/firebase';
 import { CheckCircleIcon } from '@/app/sharedIcons';
 
 interface SaveGuidePromptProps {
@@ -21,16 +20,17 @@ export default function SaveGuidePrompt({ vin, vinData, symptoms, onDismiss }: S
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const configured = isFirebaseConfigured();
+  // Account creation is backend-driven and always available now.
+  const configured = true;
 
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) return;
     setSubmitting(true);
     setError(null);
     try {
-      const user = await signUp(email.trim(), password, displayName.trim() || undefined);
+      await signUp(email.trim(), password, displayName.trim() || undefined);
       const paymentSessionId = localStorage.getItem(`rapp_unlocked_${vin}`) ?? undefined;
-      await saveRepair(user.uid, {
+      await saveRepair({
         vin,
         year: vinData ? String(vinData.year ?? '') : undefined,
         make: vinData ? String(vinData.make ?? '') : undefined,

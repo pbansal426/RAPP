@@ -1,7 +1,10 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock, AsyncMock
+
 from backend.main import app, settings
+
 
 @pytest.fixture
 def client():
@@ -178,6 +181,54 @@ def test_diagnose_low_risk(client):
     assert data["warning_message"] is None
     assert "Misfire or other symptom detected" in data["summary"]
 
+def test_diagnose_gemini_enhancement(client, monkeypatch):
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+
+    mock_response = MagicMock()
+    mock_response.text = (
+        "Likely a worn brake pad. Immediate risk is reduced stopping power."
+    )
+    mock_generate_content = AsyncMock(return_value=mock_response)
+
+    with patch("backend.services.gemini.get_genai_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = mock_generate_content
+        mock_get_client.return_value = mock_client
+
+        payload = {
+            "vin": "1HGBH41JXMN109186",
+            "symptoms": "Squeaking sound when braking",
+            "obd_codes": "P0101",
+            "tools": ["basic wrenches"],
+        }
+        response = client.post("/api/diagnose", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["summary"] == "Likely a worn brake pad. Immediate risk is reduced stopping power."
+    mock_generate_content.assert_called_once()
+    assert mock_generate_content.call_args.kwargs["model"] == "gemini-3.5-flash"
+
+def test_diagnose_gemini_failure_falls_back_to_default_summary(client, monkeypatch):
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+
+    with patch("backend.services.gemini.get_genai_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = AsyncMock(
+            side_effect=Exception("quota exceeded")
+        )
+        mock_get_client.return_value = mock_client
+
+        payload = {
+            "vin": "1HGBH41JXMN109186",
+            "symptoms": "Squeaking sound when braking",
+            "obd_codes": "P0101",
+            "tools": ["basic wrenches"],
+        }
+        response = client.post("/api/diagnose", json=payload)
+
+    assert response.status_code == 200
+    assert "Misfire or other symptom detected" in response.json()["summary"]
+
 def test_diagnose_high_risk_airbag(client):
     payload = {
         "vin": "1HGBH41JXMN109186",
@@ -285,6 +336,77 @@ def test_repair_fallback(mock_retrieve, mock_get, client):
     data = response.json()
     assert "Disconnect negative battery terminal." in data["repair_steps"]
     assert "Honda Civic ESM 2016-2021 Section 12-4" in data["citations"]
+
+@patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+@patch("backend.rag.retriever.retrieve")
+def test_repair_gemini_structured_steps(mock_retrieve, mock_get, client, monkeypatch):
+    from backend.services.gemini import RepairStep, RepairStepsSchema
+
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+    mock_decode_resp = MagicMock()
+    mock_decode_resp.status_code = 200
+    mock_decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
+    mock_get.return_value = mock_decode_resp
+    mock_retrieve.return_value = []
+
+    mock_response = MagicMock()
+    mock_response.parsed = RepairStepsSchema(
+        steps=[
+            RepairStep(text="Disconnect the negative battery terminal.", is_torque_spec=False),
+            RepairStep(text="the mounting bolt to 7.5 ft-lbs.", is_torque_spec=True),
+        ]
+    )
+    mock_generate_content = AsyncMock(return_value=mock_response)
+
+    with patch("backend.services.gemini.get_genai_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = mock_generate_content
+        mock_get_client.return_value = mock_client
+
+        payload = {
+            "vin": "1HGBH41JXMN109186",
+            "symptoms": "Unknown weird noise",
+            "stripe_session_id": "cs_test_123",
+        }
+        response = client.post("/api/repair", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["repair_steps"] == [
+        "Disconnect the negative battery terminal.",
+        "Torque the mounting bolt to 7.5 ft-lbs.",
+    ]
+    assert mock_generate_content.call_args.kwargs["model"] == "gemini-3.5-flash"
+    config = mock_generate_content.call_args.kwargs["config"]
+    assert config.response_schema is RepairStepsSchema
+
+@patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+@patch("backend.rag.retriever.retrieve")
+def test_repair_gemini_failure_falls_back_to_template(
+    mock_retrieve, mock_get, client, monkeypatch
+):
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+    mock_decode_resp = MagicMock()
+    mock_decode_resp.status_code = 200
+    mock_decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
+    mock_get.return_value = mock_decode_resp
+    mock_retrieve.return_value = []
+
+    with patch("backend.services.gemini.get_genai_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = AsyncMock(side_effect=Exception("quota exceeded"))
+        mock_get_client.return_value = mock_client
+
+        payload = {
+            "vin": "1HGBH41JXMN109186",
+            "symptoms": "Unknown weird noise",
+            "stripe_session_id": "cs_test_123",
+        }
+        response = client.post("/api/repair", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "Disconnect negative battery terminal." in data["repair_steps"]
 
 def test_create_checkout(client):
     payload = {
@@ -415,8 +537,8 @@ def test_vin_ocr_rejects_empty_file(client):
     assert "empty" in response.json()["error"].lower()
 
 
-def test_vin_ocr_unavailable_without_openai_key(client, monkeypatch):
-    monkeypatch.setattr(settings, "openai_api_key", None)
+def test_vin_ocr_unavailable_without_gemini_key(client, monkeypatch):
+    monkeypatch.setattr(settings, "gemini_api_key", None)
     response = client.post(
         "/api/vin/ocr",
         files={"file": ("vin.jpg", b"fake-image-bytes", "image/jpeg")},
@@ -425,33 +547,30 @@ def test_vin_ocr_unavailable_without_openai_key(client, monkeypatch):
     assert "manually" in response.json()["error"].lower()
 
 
-@patch("httpx.AsyncClient.post", new_callable=AsyncMock)
 @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
-def test_vin_ocr_success(mock_get, mock_post, client, monkeypatch):
-    monkeypatch.setattr(settings, "openai_api_key", "sk-test-key")
+def test_vin_ocr_success(mock_get, client, monkeypatch):
+    from backend.services.gemini import VinOcrExtraction
+
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
 
     vision_resp = MagicMock()
-    vision_resp.status_code = 200
-    vision_resp.json.return_value = {
-        "choices": [
-            {
-                "message": {
-                    "content": '{"vin": "1HGBH41JXMN109186", "confidence": 0.95}'
-                }
-            }
-        ]
-    }
-    mock_post.return_value = vision_resp
+    vision_resp.parsed = VinOcrExtraction(vin="1HGBH41JXMN109186", confidence=0.95)
+    mock_generate_content = AsyncMock(return_value=vision_resp)
 
     decode_resp = MagicMock()
     decode_resp.status_code = 200
     decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
     mock_get.return_value = decode_resp
 
-    response = client.post(
-        "/api/vin/ocr",
-        files={"file": ("vin.jpg", b"fake-image-bytes", "image/jpeg")},
-    )
+    with patch("backend.services.gemini.get_genai_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = mock_generate_content
+        mock_get_client.return_value = mock_client
+
+        response = client.post(
+            "/api/vin/ocr",
+            files={"file": ("vin.jpg", b"fake-image-bytes", "image/jpeg")},
+        )
     assert response.status_code == 200
     data = response.json()
     assert data["vin"] == "1HGBH41JXMN109186"
@@ -459,26 +578,29 @@ def test_vin_ocr_success(mock_get, mock_post, client, monkeypatch):
     assert data["decoded_vehicle"]["make"] == "HONDA"
 
 
-@patch("httpx.AsyncClient.post", new_callable=AsyncMock)
-def test_vin_ocr_no_readable_vin_returns_422(mock_post, client, monkeypatch):
-    monkeypatch.setattr(settings, "openai_api_key", "sk-test-key")
+def test_vin_ocr_no_readable_vin_returns_422(client, monkeypatch):
+    from backend.services.gemini import VinOcrExtraction
+
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
 
     vision_resp = MagicMock()
-    vision_resp.status_code = 200
-    vision_resp.json.return_value = {
-        "choices": [{"message": {"content": '{"vin": "", "confidence": 0.0}'}}]
-    }
-    mock_post.return_value = vision_resp
+    vision_resp.parsed = VinOcrExtraction(vin="", confidence=0.0)
+    mock_generate_content = AsyncMock(return_value=vision_resp)
 
-    response = client.post(
-        "/api/vin/ocr",
-        files={"file": ("vin.jpg", b"fake-image-bytes", "image/jpeg")},
-    )
+    with patch("backend.services.gemini.get_genai_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = mock_generate_content
+        mock_get_client.return_value = mock_client
+
+        response = client.post(
+            "/api/vin/ocr",
+            files={"file": ("vin.jpg", b"fake-image-bytes", "image/jpeg")},
+        )
     assert response.status_code == 422
 
 
 def test_sanitize_and_check_digit_helpers():
-    from backend.main import _sanitize_vin_candidate, _vin_check_digit_valid
+    from backend.routers.vin import _sanitize_vin_candidate, _vin_check_digit_valid
 
     assert _sanitize_vin_candidate(" 1hgb h41j-xmn109186 ") == "1HGBH41JXMN109186"
     # 1HGBH41JXMN109186 is a real, check-digit-valid Honda VIN.

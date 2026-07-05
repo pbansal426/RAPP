@@ -4,7 +4,7 @@
 services:
   backend:
     build:
-      target: builder          # Stop at builder stage (has Poetry + all dev deps)
+      target: builder          # Stop at builder stage (has uv + the app installed)
     command: >
       uvicorn backend.main:app
       --reload

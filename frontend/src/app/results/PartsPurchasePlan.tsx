@@ -88,7 +88,7 @@ export default function PartsPurchasePlan({ parts, vehicleTitle }: PartsPurchase
             Curated engineering tiers specifically matched to your {vehicleTitle ?? 'vehicle'}. Tap a tier to build your parts budget.
           </p>
         </div>
-        <span className="badge badge-pro">🛒 1-Click Affiliate Matching</span>
+        <span className="badge badge-pro">1-Click Affiliate Matching</span>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -107,7 +107,6 @@ export default function PartsPurchasePlan({ parts, vehicleTitle }: PartsPurchase
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <span style={{ fontSize: '1.25rem' }}>🔧</span>
                 <h3 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
                   {part.part_name}
                 </h3>
@@ -174,7 +173,7 @@ export default function PartsPurchasePlan({ parts, vehicleTitle }: PartsPurchase
                         <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 6px' }}>
                           {opt.brand && <span style={{ color: 'var(--accent-orange)' }}>{opt.brand} </span>}
                           {isSelected && (
-                            <span style={{ color: '#4ade80', fontSize: '0.78rem', fontWeight: 700, marginLeft: 4 }}>✓ In your plan</span>
+                            <span style={{ color: '#4ade80', fontSize: '0.78rem', fontWeight: 700, marginLeft: 4 }}>In your plan</span>
                           )}
                         </h4>
 

@@ -344,6 +344,8 @@ body {
   50%       { box-shadow: 0 0 0 8px rgba(249,115,22,0); }
 }
 
+.vin-scan-pulse { animation: pulse-orange 1.6s ease-in-out infinite; }
+
 .loading-spinner {
   width: 20px; height: 20px;
   border: 2px solid rgba(255,255,255,0.2);

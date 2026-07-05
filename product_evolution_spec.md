@@ -70,5 +70,5 @@ Because users will be referencing the app on phones or tablets in garages with g
 
 ## 4. Live AI & RAG Engine Integration
 
-- **Live OpenAI Synthesis**: Transition from static mock diagnostic summaries to real-time OpenAI GPT-4o-mini synthesis using live VIN metadata and symptom narratives.
+- **Live Gemini Synthesis** (done — see `backend/services/gemini.py`): Transition from static mock diagnostic summaries to real-time Gemini (`gemini-3.5-flash`) synthesis using live VIN metadata and symptom narratives. This includes vision-based VIN OCR via Gemini's native multimodal input; OpenAI is no longer used anywhere in the stack.
 - **Vector-Verified Constraints**: Pull real technical repair procedures from the ChromaDB vector store (`backend/rag/`) and enforce user tool constraints so the AI never suggests procedures requiring professional equipment (like 2-post hydraulic lifts) if the user only has basic hand tools and jack stands.

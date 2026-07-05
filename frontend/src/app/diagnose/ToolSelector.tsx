@@ -140,7 +140,7 @@ export default function ToolSelector({ selectedTools, onChange }: ToolSelectorPr
       </div>
       {selectedTools.length > 0 && (
         <p className="text-muted text-sm" style={{ marginTop: 10 }}>
-          ✓ {selectedTools.length} professional tool profile{selectedTools.length === 1 ? '' : 's'} active for AI diagnosis matching.
+          {selectedTools.length} professional tool profile{selectedTools.length === 1 ? '' : 's'} active for AI diagnosis matching.
         </p>
       )}
     </div>

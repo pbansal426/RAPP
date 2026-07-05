@@ -13,7 +13,9 @@ Reference specification: /Users/prathambansal/Dev/RAPP/PHASE_1_SPEC.md — read 
 ## Requirements
 
 ### R1. Backend API Server
-A FastAPI server must expose a live VIN decoding endpoint using the NHTSA public API (https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/{vin}?format=json), parsing Year, Make, Model, Engine, and Drive Type from the response. The server must also expose stub endpoints for diagnosis, repair generation, and Stripe checkout/webhook that return HTTP 200. All routes must be flat inside a single `main.py`. CORS must be configured to allow the frontend origin.
+A FastAPI server must expose a live VIN decoding endpoint using the NHTSA public API (https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/{vin}?format=json), parsing Year, Make, Model, Engine, and Drive Type from the response. The server must also expose stub endpoints for diagnosis, repair generation, and Stripe checkout/webhook that return HTTP 200. CORS must be configured to allow the frontend origin.
+
+> **Update (backend modularization):** The original "all routes flat inside a single `main.py`" constraint below has been superseded now that the backend has grown well past a single-file design. Routes are now split across `backend/routers/` (`vin.py`, `diagnose.py`, `repair.py`, `payments.py`), with `backend/core/`, `backend/services/`, and `backend/schemas.py` handling config/logging/exceptions, external service clients (Gemini, RAG, Stripe), and shared Pydantic schemas respectively. `backend/app.py` is the real FastAPI bootstrap; `backend/main.py` is kept only as a backward-compatible re-export shim. See CLAUDE.md's Architecture section for the current layout.
 
 ### R2. RAG Vector Store Abstraction
 Implement a modular abstract vector store interface with a concrete ChromaDB backend, switchable via a `VECTOR_STORE` environment variable. No code outside the `rag/` module may import `chromadb` directly. A `retrieve(query, vin_meta, k=5)` helper function must be exposed through the retriever module.
@@ -164,7 +166,7 @@ A `Makefile` must expose: `make install`, `make dev`, `make test`, `make lint`, 
 
 ## Follow-up — 2026-07-02T04:49:30Z
 
-Evolve the existing RAPP Automotive AI Repair Engine (Next.js 14 + FastAPI) from a stateless, single-use prototype into a polished, professional application. The changes span every page of the app, adding real Firebase user accounts, a dramatically improved vehicle entry flow, a premium repair experience with a side-panel AI chatbot, and a leaner, more scannable UI throughout.
+Evolve the existing RAPP Automotive AI Repair Engine (Next.js 14 + FastAPI) from a stateless, single-use prototype into a polished, professional application. The changes span every page of the app, adding real user accounts (backend-driven auth — see R5 supersession note), a dramatically improved vehicle entry flow, a premium repair experience with a side-panel AI chatbot, and a leaner, more scannable UI throughout.
 
 Working directory: /Users/prathambansal/Dev/RAPP
 
@@ -230,21 +232,22 @@ Use varied typography — different font weights, sizes, and accent colors — f
 - Ask the user questions to better understand their situation (e.g., "Have you already disconnected the battery?" or "Do you see any corrosion on the connector?").
 - Use mock/hardcoded responses that are contextually relevant to the repair type shown.
 
-### R5. Post-Repair Firebase Authentication & Account Saving
+### R5. Post-Repair Authentication & Account Saving
+
+> **Superseded (see CLAUDE.md "Auth & account storage")**: this section originally specified client-side Firebase Auth/Firestore. That was built once, then replaced with a backend-owned auth stack — running a second (Firebase) identity system alongside the FastAPI server this app already runs 24/7 was pure duplication with its own vendor/quota surface to track, for zero capability gain. The functional requirements below (dismissible sign-up prompt, `/garage` page, non-blocking) are unchanged; only the mechanism is.
 
 After the user reaches the end of the `/repair` page (scrolls past the conclusion or a trigger point), display an optional "Save Your Repair Guide" sign-up prompt — a card or modal that is dismissible.
 
-**Firebase Setup**:
-- Initialize Firebase in the project using the Firebase CLI (`npx -y firebase-tools@latest`).
-- Use Firebase Authentication (email/password) for sign-up and login.
-- Use Cloud Firestore to store each user's saved repairs (VIN, car info, symptoms, repair timestamp) and profile (display name, saved payment method flag).
-- Add Firebase config env vars to `.env.example` (prefixed `NEXT_PUBLIC_FIREBASE_*`).
-- The Firebase SDK must only be initialized client-side in Next.js (`src/lib/firebase.ts`).
+**Auth setup**:
+- `backend/routers/auth.py` exposes `POST /api/auth/signup`, `POST /api/auth/login`, `GET /api/auth/me`; passwords are hashed with `hashlib.scrypt`, sessions are HS256 JWTs signed with `JWT_SECRET_KEY`.
+- `backend/core/models.py` (SQLAlchemy) stores users (`users` table) and saved repairs (`saved_repairs` table, VIN/car info/symptoms/timestamp/payment-session-id) in `DATABASE_URL` (SQLite for local dev, Postgres in prod).
+- `frontend/src/lib/auth.ts` (`signUp`/`logIn`/`logOut`/`useAuthUser()`) and `frontend/src/lib/repairs.ts` (`saveRepair`/`listRepairs`) call these routes through `frontend/src/lib/api.ts`, storing the bearer token in localStorage under `rapp_token`.
+- No Firebase, no `NEXT_PUBLIC_FIREBASE_*` env vars, no Firestore — `src/lib/firebase.ts` is a dead stub kept only for an `isFirebaseConfigured()` call site.
 
 **Account Features**:
 - After sign-up/login, the user can see a "My Garage" page (`/garage`) listing all their saved repairs.
-- The repair guide they just unlocked is automatically saved to Firestore on account creation.
-- A "Log In" link appears in the top-right of the header on all pages once Firebase is initialized.
+- The repair guide they just unlocked is automatically saved on account creation.
+- A "Log In" link appears in the top-right of the header on all pages.
 
 **Non-blocking**: Sign-up must be entirely optional. Users who dismiss the prompt can still view and scroll the repair guide without any restriction.
 
@@ -289,11 +292,11 @@ Add back buttons on `/diagnose`, `/results`, and `/repair`. Each must navigate t
 - [ ] Side chatbot panel is visible by default on page load (not hidden behind a button)
 - [ ] Back button navigates to `/results`
 
-### Firebase & Account
-- [ ] `src/lib/firebase.ts` initializes Firebase with env-var config
+### Auth & Account (see supersession note under R5 — no longer Firebase)
+- [ ] `backend/routers/auth.py` + `backend/core/security.py` issue/verify JWTs against `users` table
 - [ ] Sign-up modal/card appears at the end of the repair page and is dismissible
 - [ ] `/garage` route renders without a 404 and shows saved repairs for a logged-in user
-- [ ] `.env.example` contains all required `NEXT_PUBLIC_FIREBASE_*` keys
+- [ ] `.env.example` contains `DATABASE_URL` and `JWT_SECRET_KEY`
 
 ### Tests
 - [ ] `./tests/verify_tests.sh` exits 0 (all 5 verification scenarios pass)

@@ -5,7 +5,12 @@ import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { fetchAllMakes, fetchModels, POWERTRAINS, type MakeGroups } from '@/lib/nhtsa';
 import { getTrimsForModel, lookupVehicleSpecs } from '@/lib/vehicleSpecs';
+import { isValidVinCheckDigit } from '@/lib/vinCheckDigit';
 import { AppLogoMarkIcon } from '@/app/sharedIcons';
+import VinCropModal from './VinCropModal';
+import ScanModeModal from './ScanModeModal';
+import WindshieldScanModal from './WindshieldScanModal';
+import DoorJambScanModal from './DoorJambScanModal';
 
 interface VinData {
   vin: string;
@@ -29,13 +34,18 @@ function buildSyntheticVin(year: string, make: string, model: string): string {
 
 export default function HomePage() {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   // Manual VIN input state
   const [vin, setVin] = useState('');
   const [loading, setLoading] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
+
+  // Scan flow: chooser -> live camera modal (windshield tag photo, or door jamb barcode)
+  const [scanChooserOpen, setScanChooserOpen] = useState(false);
+  const [scanMode, setScanMode] = useState<'windshield' | 'doorjamb' | null>(null);
 
   // Cascading YMM dropdown state (data live from NHTSA)
   const [selectedYear, setSelectedYear] = useState('');
@@ -125,8 +135,8 @@ export default function HomePage() {
     setYmmError(null);
   };
 
-  const handleSubmit = async () => {
-    const trimmed = vin.trim().toUpperCase();
+  const decodeAndGo = async (vinCandidate: string) => {
+    const trimmed = vinCandidate.trim().toUpperCase();
     if (trimmed.length !== 17) {
       setError('VIN must be exactly 17 characters.');
       return;
@@ -144,6 +154,8 @@ export default function HomePage() {
       setLoading(false);
     }
   };
+
+  const handleSubmit = () => decodeAndGo(vin);
 
   const handleYmmSubmit = () => {
     if (!selectedYear || !selectedMake || !selectedModel) {
@@ -170,20 +182,18 @@ export default function HomePage() {
     router.push('/diagnose');
   };
 
-  const handleScanClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  // Shared by Upload (existing photo) and the Windshield live-capture modal —
+  // both hand over exactly one still image and go through the identical
+  // Gemini-OCR-first, Tesseract-crop-fallback pipeline. One Gemini call per
+  // image, never a stream of frames.
+  const processVinImage = async (image: File | Blob) => {
     setError(null);
     setOcrLoading(true);
+    let startedCrop = false;
     try {
       // First try backend OCR endpoint (supports HEIC, Vision AI, check-digits, and NHTSA auto-decode)
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', image, image instanceof File ? image.name : 'vin-capture.jpg');
       const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
       const res = await fetch(`${apiUrl}/api/vin/ocr`, {
         method: 'POST',
@@ -204,26 +214,81 @@ export default function HomePage() {
         }
       }
 
-      // Client-side fallback if backend API key is unconfigured or offline
-      const { createWorker } = await import('tesseract.js');
+      // Client-side fallback if backend API key is unconfigured or offline.
+      // Raw full-photo OCR is unusable in practice -- the VIN tag is a tiny
+      // fraction of a typical photo, and Tesseract tries to read the
+      // surrounding paint/glass texture as text. Cropping tightly to just
+      // the tag is what actually makes free OCR work, so hand off to a
+      // crop step instead of running Tesseract on the whole frame.
+      startedCrop = true;
+      setCropImageUrl(URL.createObjectURL(image));
+    } catch (err) {
+      console.error(err);
+      setError('Could not read the image. Please enter the VIN manually.');
+    } finally {
+      if (!startedCrop) setOcrLoading(false);
+    }
+  };
+
+  const handleUploadFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processVinImage(file);
+    e.target.value = '';
+  };
+
+  // WindshieldScanModal scans the live feed itself and only calls this once
+  // it has both a VIN and a decoded vehicle in hand, so no second /api/vin
+  // round-trip is needed here -- just persist and go, same as every other
+  // successful identification path.
+  const handleWindshieldDetected = (detectedVin: string, decodedVehicle: VinData) => {
+    setScanMode(null);
+    setVin(detectedVin);
+    localStorage.setItem('rapp_vin', detectedVin);
+    localStorage.setItem('rapp_vin_data', JSON.stringify(decodedVehicle));
+    router.push('/diagnose');
+  };
+
+  const handleDoorJambDecoded = async (candidateVin: string) => {
+    setScanMode(null);
+    setVin(candidateVin);
+    await decodeAndGo(candidateVin);
+  };
+
+  const handleCropCancel = () => {
+    if (cropImageUrl) URL.revokeObjectURL(cropImageUrl);
+    setCropImageUrl(null);
+    setOcrLoading(false);
+  };
+
+  const handleCropConfirm = async (canvas: HTMLCanvasElement) => {
+    if (cropImageUrl) URL.revokeObjectURL(cropImageUrl);
+    setCropImageUrl(null);
+    try {
+      const { createWorker, PSM } = await import('tesseract.js');
       const worker = await createWorker('eng');
-      const ret = await worker.recognize(file);
+      await worker.setParameters({
+        tessedit_char_whitelist: 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789',
+        tessedit_pageseg_mode: PSM.SINGLE_LINE,
+      });
+      const ret = await worker.recognize(canvas);
       await worker.terminate();
 
-      const text = ret.data.text;
-      const cleanedText = text.toUpperCase().replace(/[\s\-_]/g, '');
+      const cleanedText = ret.data.text.toUpperCase().replace(/[^A-Z0-9]/g, '');
       const match = cleanedText.match(/[A-Z0-9]{17}/);
       if (match) {
         setVin(match[0]);
+        if (!isValidVinCheckDigit(match[0])) {
+          setError('This may not be a fully accurate read (failed VIN check-digit validation) — please verify it against the tag before continuing.');
+        }
       } else {
-        setError('No 17-character VIN found in the image. Try a closer, well-lit shot of the tag.');
+        setError('No 17-character VIN found in the cropped area. Try cropping tighter around just the text, or enter the VIN manually.');
       }
     } catch (err) {
       console.error(err);
       setError('Could not read the image. Please enter the VIN manually.');
     } finally {
       setOcrLoading(false);
-      e.target.value = '';
     }
   };
 
@@ -280,19 +345,30 @@ export default function HomePage() {
             data-testid="scan-barcode-btn"
             className="btn btn-secondary"
             type="button"
-            onClick={handleScanClick}
+            onClick={() => setScanChooserOpen(true)}
             disabled={loading || ocrLoading}
           >
-            {ocrLoading ? <><span className="loading-spinner" aria-hidden="true" /> Reading VIN tag…</> : 'Photograph VIN Tag'}
+            {ocrLoading ? <><span className="loading-spinner" aria-hidden="true" /> Reading VIN tag…</> : 'Scan VIN'}
           </button>
 
+          <button
+            id="upload-vin-photo-btn"
+            data-testid="upload-vin-photo-btn"
+            className="btn btn-secondary"
+            type="button"
+            onClick={() => uploadInputRef.current?.click()}
+            disabled={loading || ocrLoading}
+          >
+            {ocrLoading ? <><span className="loading-spinner" aria-hidden="true" /> Reading VIN tag…</> : 'Upload Photo'}
+          </button>
+
+          {/* No `capture` attribute here — this opens the photo library, not the camera. */}
           <input
             type="file"
-            ref={fileInputRef}
+            ref={uploadInputRef}
             style={{ display: 'none' }}
             accept="image/*,.heic,.heif"
-            capture="environment"
-            onChange={handleFileChange}
+            onChange={handleUploadFileChange}
           />
         </div>
       </div>
@@ -461,6 +537,26 @@ export default function HomePage() {
           </button>
         </div>
       </div>
+
+      {cropImageUrl && (
+        <VinCropModal imageUrl={cropImageUrl} onConfirm={handleCropConfirm} onCancel={handleCropCancel} />
+      )}
+
+      {scanChooserOpen && (
+        <ScanModeModal
+          onChooseWindshield={() => { setScanChooserOpen(false); setScanMode('windshield'); }}
+          onChooseDoorJamb={() => { setScanChooserOpen(false); setScanMode('doorjamb'); }}
+          onCancel={() => setScanChooserOpen(false)}
+        />
+      )}
+
+      {scanMode === 'windshield' && (
+        <WindshieldScanModal onDetected={handleWindshieldDetected} onCancel={() => setScanMode(null)} />
+      )}
+
+      {scanMode === 'doorjamb' && (
+        <DoorJambScanModal onDecoded={handleDoorJambDecoded} onCancel={() => setScanMode(null)} />
+      )}
     </main>
   );
 }

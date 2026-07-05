@@ -5,8 +5,9 @@ Turns the flat ``parts`` price-range strings on a :class:`RepairTemplate`
 for the diagnosis response: three purchase tiers per part (OEM, budget
 aftermarket, performance/heavy-duty upgrade) plus a dealership vs.
 independent-shop vs. DIY cost comparison. Pure functions returning plain
-dicts so ``backend/main.py`` can validate them through its Pydantic response
-models without this module needing to depend on FastAPI/Pydantic.
+dicts so ``backend/routers/diagnose.py`` can validate them through its
+Pydantic response models without this module needing to depend on
+FastAPI/Pydantic.
 """
 
 from __future__ import annotations

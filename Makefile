@@ -2,8 +2,8 @@
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 install:
-	@echo "→ Installing Python deps via Poetry..."
-	poetry install
+	@echo "→ Installing Python deps via uv..."
+	uv sync --all-groups
 	@echo "→ Installing Node deps..."
 	cd frontend && pnpm install
 	@echo "→ Installing Playwright browsers..."
@@ -12,7 +12,7 @@ install:
 
 # ── Development ───────────────────────────────────────────────────────────────
 dev-backend:
-	poetry run uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+	uv run uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 
 dev-frontend:
 	cd frontend && pnpm dev
@@ -26,23 +26,23 @@ dev:
 # ── Code Quality ──────────────────────────────────────────────────────────────
 lint:
 	@echo "→ Running Ruff..."
-	poetry run ruff check backend/
+	uv run ruff check backend/
 	@echo "→ Running Black (check only)..."
-	poetry run black --check backend/
+	uv run black --check backend/
 	@echo "✅ Lint passed."
 
 lint-fix:
-	poetry run ruff check --fix backend/
-	poetry run black backend/
+	uv run ruff check --fix backend/
+	uv run black backend/
 
 type-check:
 	@echo "→ Running mypy..."
-	poetry run mypy backend/
+	uv run mypy backend/
 	@echo "✅ Type check passed."
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 test-unit:
-	poetry run pytest tests/unit/ -v
+	uv run pytest tests/unit/ -v
 
 test-e2e:
 	npx playwright test

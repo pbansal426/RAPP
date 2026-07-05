@@ -1,6 +1,13 @@
 import os
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
+import structlog
+from google import genai
+from google.genai import types as genai_types
+
+logger = structlog.get_logger()
+
+GEMINI_EMBEDDING_MODEL = "text-embedding-004"
 
 class VectorStore(ABC):
     """
@@ -59,14 +66,15 @@ class VectorStore(ABC):
 
 class ChromaVectorStore(VectorStore):
     """
-    ChromaDB implementation of the VectorStore interface.
+    ChromaDB implementation of the VectorStore interface with Gemini embeddings.
     Encapsulates all chromadb imports and client logic.
     """
 
     def __init__(
         self, 
         persistent_path: Optional[str] = None, 
-        collection_name: str = "repair_manuals"
+        collection_name: str = "repair_manuals",
+        use_gemini_embeddings: bool = True
     ):
         """
         Initialize the ChromaVectorStore client.
@@ -77,21 +85,36 @@ class ChromaVectorStore(VectorStore):
             Path to persistent directory. If None, runs an ephemeral client.
         collection_name : str
             Name of the collection to use.
+        use_gemini_embeddings : bool
+            Whether to use Gemini embeddings instead of default ChromaDB embeddings.
         """
         import chromadb  # Confined import
 
         self.collection_name = collection_name
+        self.use_gemini_embeddings = use_gemini_embeddings
+        
         if persistent_path:
             os.makedirs(persistent_path, exist_ok=True)
             self.client = chromadb.PersistentClient(path=persistent_path)
         else:
             self.client = chromadb.EphemeralClient()
             
+        # Initialize Gemini client if using Gemini embeddings
+        self.genai_client = None
+        if self.use_gemini_embeddings:
+            try:
+                self.genai_client = genai.Client()
+                logger.info("Gemini embeddings initialized for vector store")
+            except Exception as e:
+                logger.warning("Failed to initialize Gemini client, falling back to default embeddings", error=str(e))
+                self.use_gemini_embeddings = False
+        
         self.collection = self.client.get_or_create_collection(name=collection_name)
 
     def add_documents(self, documents: List[Dict[str, Any]]) -> None:
         """
         Adds flat documents and handles ChromaDB metadata serialization limits.
+        Uses Gemini embeddings if configured.
         """
         if not documents:
             return
@@ -99,10 +122,20 @@ class ChromaVectorStore(VectorStore):
         ids = []
         texts = []
         metadatas = []
+        embeddings = []
 
         for doc in documents:
             ids.append(doc["id"])
             texts.append(doc["text"])
+            
+            # Generate embeddings using Gemini if configured
+            if self.use_gemini_embeddings and self.genai_client:
+                try:
+                    embedding = self._generate_gemini_embedding(doc["text"])
+                    embeddings.append(embedding)
+                except Exception as e:
+                    logger.warning(f"Failed to generate Gemini embedding for {doc['id']}, using default", error=str(e))
+                    embeddings.append(None)
             
             # ChromaDB metadata must have flat types (str, int, float, bool)
             flat_metadata = {}
@@ -123,11 +156,20 @@ class ChromaVectorStore(VectorStore):
                     flat_metadata[k] = str(v)
             metadatas.append(flat_metadata)
 
-        self.collection.add(
-            ids=ids,
-            documents=texts,
-            metadatas=metadatas
-        )
+        # Add documents with or without pre-computed embeddings
+        if self.use_gemini_embeddings and all(e is not None for e in embeddings):
+            self.collection.add(
+                ids=ids,
+                documents=texts,
+                metadatas=metadatas,
+                embeddings=embeddings
+            )
+        else:
+            self.collection.add(
+                ids=ids,
+                documents=texts,
+                metadatas=metadatas
+            )
 
     def search(
         self, 
@@ -137,6 +179,7 @@ class ChromaVectorStore(VectorStore):
     ) -> List[Dict[str, Any]]:
         """
         Queries ChromaDB collection, constructing filters dynamically.
+        Uses Gemini embeddings for query if configured.
         """
         try:
             count = self.collection.count()
@@ -174,12 +217,31 @@ class ChromaVectorStore(VectorStore):
 
         try:
             n_results = min(k, count)
-            results = self.collection.query(
-                query_texts=[query],
-                n_results=n_results,
-                where=where_clause
-            )
-        except Exception:
+            
+            # Use Gemini embeddings for query if configured
+            if self.use_gemini_embeddings and self.genai_client:
+                try:
+                    query_embedding = self._generate_gemini_embedding(query)
+                    results = self.collection.query(
+                        query_embeddings=[query_embedding],
+                        n_results=n_results,
+                        where=where_clause
+                    )
+                except Exception as e:
+                    logger.warning("Gemini query embedding failed, falling back to default", error=str(e))
+                    results = self.collection.query(
+                        query_texts=[query],
+                        n_results=n_results,
+                        where=where_clause
+                    )
+            else:
+                results = self.collection.query(
+                    query_texts=[query],
+                    n_results=n_results,
+                    where=where_clause
+                )
+        except Exception as e:
+            logger.warning("ChromaDB query failed", error=str(e))
             return []
 
         formatted_results = []
@@ -202,6 +264,21 @@ class ChromaVectorStore(VectorStore):
                 })
 
         return formatted_results
+    
+    def _generate_gemini_embedding(self, text: str) -> List[float]:
+        """Generate embedding using Gemini text-embedding-004."""
+        try:
+            response = self.genai_client.models.embed_content(
+                model=GEMINI_EMBEDDING_MODEL,
+                content=text,
+                config=genai_types.EmbedContentConfig(
+                    task_type="retrieval_document",
+                )
+            )
+            return response.embedding.values
+        except Exception as e:
+            logger.error("Failed to generate Gemini embedding", error=str(e))
+            raise
 
 
 class MockVectorStore(VectorStore):

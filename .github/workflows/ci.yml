@@ -17,28 +17,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
+          enable-cache: true
           python-version: "3.11"
 
-      - name: Install Poetry
-        run: pip install poetry==1.8.3
-
       - name: Install dependencies
-        run: poetry install --with dev --no-interaction
+        run: uv sync --all-groups
 
       - name: Ruff lint
-        run: poetry run ruff check backend/
+        run: uv run ruff check backend/
 
       - name: Black format check
-        run: poetry run black --check backend/
+        run: uv run black --check backend/
 
       - name: Mypy type check
-        run: poetry run mypy backend/
+        run: uv run mypy backend/
 
       - name: Unit tests
-        run: poetry run pytest tests/unit/ -v
+        run: uv run pytest tests/unit/ -v
 
   e2e-tests:
     name: E2E — Playwright against mock app
@@ -48,16 +46,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
+          enable-cache: true
           python-version: "3.11"
 
-      - name: Install Poetry
-        run: pip install poetry==1.8.3
-
       - name: Install Python deps
-        run: poetry install --only main --no-interaction
+        run: uv sync --no-group dev
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

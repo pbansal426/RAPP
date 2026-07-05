@@ -1,16 +1,20 @@
 FROM python:3.11-slim AS builder
 
-# Install Poetry
-RUN pip install --no-cache-dir poetry==1.8.3
+# Grab the standalone uv binary rather than pip-installing it.
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Copy dependency files first for layer caching
-COPY pyproject.toml poetry.lock* ./
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
-# Export deps to requirements format and install into a clean venv
-RUN poetry config virtualenvs.create false \
- && poetry install --only main --no-interaction --no-ansi
+# Copy dependency files first for layer caching, install deps before app code.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project --no-group dev
+
+COPY backend/ ./backend/
+RUN uv sync --frozen --no-group dev
+
+ENV PATH="/app/.venv/bin:${PATH}"
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
@@ -20,17 +24,16 @@ RUN addgroup --system rapp && adduser --system --ingroup rapp rapp
 
 WORKDIR /app
 
-# Copy installed site-packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Copy application code
+# Copy the uv-managed virtualenv and application code from the builder stage
+COPY --from=builder /app/.venv /app/.venv
 COPY backend/ ./backend/
 
 # Data directory for ChromaDB persistence
 RUN mkdir -p /app/data/chroma_db && chown -R rapp:rapp /app
 
 USER rapp
+
+ENV PATH="/app/.venv/bin:${PATH}"
 
 EXPOSE 8000
 

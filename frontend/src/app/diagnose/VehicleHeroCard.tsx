@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { getLogoUrl } from '@/lib/logos';
-import { getBrandLogoSvg } from './BrandLogos';
 
 interface VehicleHeroCardProps {
   vin: string;
@@ -42,14 +41,14 @@ export default function VehicleHeroCard({ vin, vinData }: VehicleHeroCardProps) 
   const logoUrl = getLogoUrl(make);
   const title = [year, make, model].filter(Boolean).join(' ') || 'Vehicle Identified';
 
-  const brandSvg = getBrandLogoSvg(make);
+  const specParts = [engine, drive, `VIN ${vin}`].filter(Boolean);
 
   return (
     <div className="vehicle-hero">
       <div className="vehicle-hero-logo">
-        {brandSvg ? (
-          brandSvg
-        ) : logoUrl && !logoFailed ? (
+        {logoUrl && !logoFailed ? (
+          // Real transparent manufacturer logo (clearbit); falls back to a
+          // generic car glyph if the CDN can't serve it.
           // eslint-disable-next-line @next/next/no-img-element
           <img src={logoUrl} alt={`${make} logo`} onError={() => setLogoFailed(true)} />
         ) : (
@@ -58,14 +57,24 @@ export default function VehicleHeroCard({ vin, vinData }: VehicleHeroCardProps) 
       </div>
       <div className="vehicle-hero-info">
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-          <span className="badge badge-free">✓ Vehicle Identified</span>
-          {powertrain && <span className="badge badge-pro" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', borderColor: 'rgba(34, 197, 94, 0.3)' }}>🔒 {powertrain} Powertrain Locked</span>}
+          <span className="badge badge-free">Vehicle Identified</span>
+          {powertrain && (
+            <span
+              className="badge badge-pro"
+              style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', borderColor: 'rgba(34, 197, 94, 0.3)' }}
+            >
+              {powertrain} · Specs Locked
+            </span>
+          )}
         </div>
         <h2 className="vehicle-hero-title">{title}</h2>
         <p className="vehicle-hero-sub">
-          {engine && <span>⚙️ {engine}</span>}
-          {drive && <span>🚗 {drive}</span>}
-          <span>🔑 VIN {vin}</span>
+          {specParts.map((part, i) => (
+            <span key={part}>
+              {i > 0 && <span aria-hidden="true"> • </span>}
+              {part}
+            </span>
+          ))}
         </p>
       </div>
     </div>

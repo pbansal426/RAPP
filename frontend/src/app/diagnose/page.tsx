@@ -15,8 +15,9 @@ export default function DiagnosePage() {
   const [symptoms, setSymptoms] = useState('');
   const [selectedObdCodes, setSelectedObdCodes] = useState<ObdCode[]>([]);
   const [tools, setTools] = useState<string[]>([]);
-  const [photoPreviews, setPhotoPreviews] = useState<{ url: string; name: string; isHeic: boolean }[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<{ url: string; name: string; isHeic: boolean; converting: boolean }[]>([]);
   const [showAllPhotos, setShowAllPhotos] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -41,21 +42,42 @@ export default function DiagnosePage() {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
-    const newPreviews = files.map((file) => {
+    files.forEach((file) => {
       const name = file.name;
       const ext = name.split('.').pop()?.toLowerCase();
       const isHeic = ext === 'heic' || ext === 'heif' || file.type === 'image/heic' || file.type === 'image/heif';
-      return {
-        url: URL.createObjectURL(file),
-        name,
-        isHeic,
-      };
+      const rawUrl = URL.createObjectURL(file);
+      // Browsers can't paint HEIC in an <img>, so convert to JPEG client-side
+      // for a real preview; show a "converting" placeholder meanwhile.
+      const entry = { url: rawUrl, name, isHeic, converting: isHeic };
+      setPhotoPreviews((prev) => [...prev, entry]);
+
+      if (isHeic) {
+        import('heic2any')
+          .then((mod) => (mod.default as (o: { blob: Blob; toType?: string }) => Promise<Blob | Blob[]>)({ blob: file, toType: 'image/jpeg' }))
+          .then((out) => {
+            const blob = Array.isArray(out) ? out[0] : out;
+            const jpegUrl = URL.createObjectURL(blob);
+            setPhotoPreviews((prev) =>
+              prev.map((p) => (p.url === rawUrl ? { ...p, url: jpegUrl, converting: false } : p))
+            );
+            URL.revokeObjectURL(rawUrl);
+          })
+          .catch(() => {
+            // Conversion failed — drop the spinner, keep the labeled placeholder.
+            setPhotoPreviews((prev) =>
+              prev.map((p) => (p.url === rawUrl ? { ...p, converting: false } : p))
+            );
+          });
+      }
     });
-    setPhotoPreviews((prev) => [...prev, ...newPreviews]);
+    e.target.value = '';
   };
 
+  const hasDiagnosticInput = symptoms.trim().length > 0 || selectedObdCodes.length > 0;
+
   const handleSubmit = () => {
-    if (!symptoms.trim() && selectedObdCodes.length === 0) return;
+    if (!hasDiagnosticInput) return;
     localStorage.setItem('rapp_symptoms', symptoms.trim());
     localStorage.setItem(
       'rapp_obd_codes',
@@ -115,7 +137,7 @@ export default function DiagnosePage() {
                   boxShadow: '0 2px 8px rgba(249, 115, 22, 0.15)',
                 }}
               >
-                ⚠️ {c.code}: {c.description}
+                {c.code}: {c.description}
                 <button
                   type="button"
                   onClick={() => removeObdCode(c.code)}
@@ -181,8 +203,11 @@ export default function DiagnosePage() {
                 }}
               >
                 {(showAllPhotos ? photoPreviews : photoPreviews.slice(0, 3)).map((photo, idx) => (
-                  <div
+                  <button
+                    type="button"
                     key={photo.url}
+                    onClick={() => !photo.converting && setLightboxUrl(photo.url)}
+                    aria-label={`View ${photo.name}`}
                     style={{
                       position: 'relative',
                       borderRadius: 'var(--radius-sm)',
@@ -193,55 +218,15 @@ export default function DiagnosePage() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       background: 'rgba(30, 41, 59, 0.4)',
+                      padding: 0,
+                      cursor: photo.converting ? 'default' : 'zoom-in',
                     }}
                   >
-                    {photo.isHeic ? (
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: '#0b1329', // Deep industrial navy background
-                          border: '1px solid #f97316', // Orange warning highlights/borders
-                          color: '#f8fafc',
-                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                          fontSize: '0.75rem',
-                          textAlign: 'center',
-                          padding: 8,
-                          gap: 4,
-                        }}
-                      >
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="#f97316"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M21 16V8a2 2 0 0 0-2-2h-2l-1.5-2.5h-7L7 6H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z" />
-                          <circle cx="12" cy="12" r="3" />
-                        </svg>
-                        <span style={{ fontWeight: 800, color: '#f97316', letterSpacing: '0.05em' }}>HEIC PREVIEW</span>
-                        <span
-                          style={{
-                            fontSize: '0.65rem',
-                            opacity: 0.7,
-                            textOverflow: 'ellipsis',
-                            overflow: 'hidden',
-                            whiteSpace: 'nowrap',
-                            width: '100%',
-                            padding: '0 4px',
-                          }}
-                        >
-                          {photo.name}
-                        </span>
-                      </div>
+                    {photo.converting ? (
+                      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, color: 'var(--text-secondary)', fontSize: '0.7rem' }}>
+                        <span className="loading-spinner" aria-hidden="true" />
+                        Converting…
+                      </span>
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -250,7 +235,7 @@ export default function DiagnosePage() {
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                     )}
-                  </div>
+                  </button>
                 ))}
               </div>
               {photoPreviews.length > 3 && (
@@ -281,10 +266,64 @@ export default function DiagnosePage() {
         data-testid="submit-diagnose-btn"
         className="btn btn-primary"
         onClick={handleSubmit}
-        disabled={!symptoms.trim() && selectedObdCodes.length === 0}
+        disabled={!hasDiagnosticInput}
+        title={hasDiagnosticInput ? undefined : 'Describe a symptom or select at least one OBD-II code to continue'}
       >
         → Run AI Diagnosis &amp; Mod Planner
       </button>
+      {!hasDiagnosticInput && (
+        <p className="text-muted text-sm" style={{ textAlign: 'center', marginTop: 8 }}>
+          Describe a symptom or select at least one OBD-II code above to continue.
+        </p>
+      )}
+
+      {lightboxUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Photo preview"
+          onClick={() => setLightboxUrl(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(2, 6, 23, 0.88)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+            cursor: 'zoom-out',
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxUrl}
+            alt="Enlarged attached photo"
+            style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 'var(--radius-sm)', boxShadow: '0 12px 48px rgba(0,0,0,0.6)' }}
+          />
+          <button
+            type="button"
+            aria-label="Close preview"
+            onClick={() => setLightboxUrl(null)}
+            style={{
+              position: 'fixed',
+              top: 20,
+              right: 20,
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              border: '1px solid rgba(255,255,255,0.2)',
+              background: 'rgba(15,23,42,0.9)',
+              color: '#fff',
+              fontSize: '1.4rem',
+              lineHeight: 1,
+              cursor: 'pointer',
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
     </main>
   );
 }

@@ -67,9 +67,9 @@ export default function ResultsPage() {
     setGarageSubmitting(true);
     setGarageError(null);
     try {
-      const user = await signUp(garageEmail.trim(), garagePassword, garageName.trim() || undefined);
+      await signUp(garageEmail.trim(), garagePassword, garageName.trim() || undefined);
       const paymentSessionId = localStorage.getItem(`rapp_unlocked_${vin}`) ?? undefined;
-      await saveRepair(user.uid, {
+      await saveRepair({
         vin,
         year: vinData ? String(vinData.year ?? '') : undefined,
         make: vinData ? String(vinData.make ?? '') : undefined,
@@ -89,8 +89,11 @@ export default function ResultsPage() {
 
   useEffect(() => {
     const storedVin = localStorage.getItem('rapp_vin');
+    // Symptoms text is optional (OBD codes/tools/photos alone are enough
+    // context), so an empty string is valid -- only a completely missing
+    // key (never went through /diagnose) should redirect home.
     const storedSymptoms = localStorage.getItem('rapp_symptoms');
-    if (!storedVin || !storedSymptoms) { router.push('/'); return; }
+    if (!storedVin || storedSymptoms === null) { router.push('/'); return; }
     setVin(storedVin);
     setSymptoms(storedSymptoms);
 
@@ -130,7 +133,17 @@ export default function ResultsPage() {
         vin,
         price_type: 'single',
       });
-      window.location.href = checkout_url;
+      // The mock stub returns a backend URL that just 303s to the frontend
+      // success route. Doing a full-page hop to the backend caused a blank
+      // page when the backend was slow/unreachable, so we stay in the SPA:
+      // pull the session id out and route straight to the success handler.
+      let sessionId = 'cs_test_stub';
+      try {
+        sessionId = new URL(checkout_url).searchParams.get('session_id') || sessionId;
+      } catch {
+        // checkout_url wasn't absolute — fall back to the stub session id
+      }
+      router.push(`/repair/success?session_id=${encodeURIComponent(sessionId)}&vin=${encodeURIComponent(vin)}`);
     } catch {
       setPayLoading(false);
       alert('Payment service unavailable. Please try again.');

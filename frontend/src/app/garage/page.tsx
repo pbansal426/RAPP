@@ -2,42 +2,23 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { logIn, signUp, logOut, useAuthUser } from '@/lib/auth';
+import { logOut, useAuthUser } from '@/lib/auth';
 import { listRepairs, type SavedRepair } from '@/lib/repairs';
 import { AppLogoMarkIcon } from '@/app/sharedIcons';
 
 export default function GaragePage() {
   const router = useRouter();
   const { user, loading, configured } = useAuthUser();
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [repairs, setRepairs] = useState<SavedRepair[] | null>(null);
 
   useEffect(() => {
     if (!user) { setRepairs(null); return; }
-    listRepairs(user.uid).then(setRepairs).catch(() => setRepairs([]));
+    listRepairs().then(setRepairs).catch(() => setRepairs([]));
   }, [user]);
 
-  const handleAuthSubmit = async () => {
-    if (!email.trim() || !password.trim()) return;
-    setSubmitting(true);
-    setAuthError(null);
-    try {
-      if (mode === 'login') {
-        await logIn(email.trim(), password);
-      } else {
-        await signUp(email.trim(), password, displayName.trim() || undefined);
-      }
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Authentication failed.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  useEffect(() => {
+    if (configured && !loading && !user) router.push('/signin?next=/garage');
+  }, [configured, loading, user, router]);
 
   return (
     <main className="page">
@@ -64,33 +45,9 @@ export default function GaragePage() {
         </div>
       )}
 
-      {configured && loading && (
+      {configured && (loading || !user) && (
         <div className="card" style={{ textAlign: 'center', padding: '32px' }}>
           <div className="loading-spinner" style={{ margin: '0 auto' }} />
-        </div>
-      )}
-
-      {configured && !loading && !user && (
-        <div className="card">
-          <p className="card-label">{mode === 'login' ? 'Log In' : 'Create Account'}</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
-            {mode === 'signup' && (
-              <input className="input" type="text" placeholder="Name (optional)" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-            )}
-            <input className="input" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <input className="input" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-            {authError && <p style={{ color: 'var(--accent-red)', fontSize: '0.85rem' }}>{authError}</p>}
-            <button className="btn btn-primary" onClick={handleAuthSubmit} disabled={submitting || !email.trim() || !password.trim()}>
-              {submitting ? <><span className="loading-spinner" aria-hidden="true" /> Please wait…</> : mode === 'login' ? 'Log In' : 'Create Account'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setAuthError(null); }}
-            >
-              {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Log in'}
-            </button>
-          </div>
         </div>
       )}
 
@@ -98,7 +55,10 @@ export default function GaragePage() {
         <>
           <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="text-muted text-sm">Signed in as <strong style={{ color: 'var(--text-primary)' }}>{user.email}</strong></span>
-            <button className="btn btn-secondary" style={{ width: 'auto', padding: '0 16px' }} onClick={() => logOut()}>Log Out</button>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <a href="/settings" className="btn btn-secondary" style={{ width: 'auto', padding: '0 16px', textDecoration: 'none' }}>Settings</a>
+              <button className="btn btn-secondary" style={{ width: 'auto', padding: '0 16px' }} onClick={() => logOut()}>Log Out</button>
+            </div>
           </div>
 
           {repairs === null && (
