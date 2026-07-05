@@ -82,6 +82,22 @@ export default function GaragePage() {
                   </p>
                   <p className="text-muted text-sm" style={{ marginBottom: 4 }}>VIN: {r.vin}</p>
                   <p className="text-muted text-sm" style={{ marginBottom: 4 }}>{r.symptoms}</p>
+                  {r.citations && r.citations.length > 0 && (
+                    <div style={{ marginTop: 8, marginBottom: 4 }}>
+                      <p className="text-muted text-sm" style={{ marginBottom: 6, fontWeight: 700 }}>OEM Sources</p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {r.citations.map((cite, i) => (
+                          <span
+                            key={i}
+                            className="citation-chip"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                          >
+                            {cite}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {r.savedAt && <p className="text-muted text-sm">Saved {r.savedAt}</p>}
                 </div>
               ))}

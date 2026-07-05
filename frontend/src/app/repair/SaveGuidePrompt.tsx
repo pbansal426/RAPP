@@ -9,10 +9,11 @@ interface SaveGuidePromptProps {
   vin: string;
   vinData: Record<string, unknown> | null;
   symptoms: string;
+  citations?: string[];
   onDismiss: () => void;
 }
 
-export default function SaveGuidePrompt({ vin, vinData, symptoms, onDismiss }: SaveGuidePromptProps) {
+export default function SaveGuidePrompt({ vin, vinData, symptoms, citations, onDismiss }: SaveGuidePromptProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -39,6 +40,7 @@ export default function SaveGuidePrompt({ vin, vinData, symptoms, onDismiss }: S
         powertrain: vinData?.powertrain ? String(vinData.powertrain) : undefined,
         symptoms,
         paymentSessionId,
+        citations: citations && citations.length > 0 ? citations : undefined,
       });
       setSaved(true);
     } catch (err) {

@@ -9,6 +9,7 @@ import ChatPanel from './ChatPanel';
 import ConclusionPhase from './ConclusionPhase';
 import SaveGuidePrompt from './SaveGuidePrompt';
 import { useAuthUser } from '@/lib/auth';
+import type { RecommendedPart } from '@/lib/types';
 import {
   AppLogoMarkIcon,
   BoltIcon,
@@ -39,10 +40,35 @@ export default function RepairPage() {
   const [error, setError] = useState<string | null>(null);
   const [unlocked, setUnlocked] = useState(false);
   const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({});
+  const [parts, setParts] = useState<RecommendedPart[]>([]);
   const [showSavePrompt, setShowSavePrompt] = useState(false);
   const [savePromptDismissed, setSavePromptDismissed] = useState(false);
   const conclusionRef = useRef<HTMLDivElement>(null);
   const { user: authUser } = useAuthUser();
+
+  const generateAndCache = (
+    storedVin: string,
+    storedSymptoms: string,
+    tools: string[],
+    sessionId: string,
+    parsedVinData: Record<string, unknown> | null
+  ) => {
+    setLoading(true);
+    api.post<RepairResponse>('/api/repair', {
+      vin: storedVin,
+      symptoms: storedSymptoms,
+      obd_codes: [],
+      tools,
+      stripe_session_id: sessionId,
+      vehicle: parsedVinData,
+    })
+      .then((res) => {
+        setRepair(res);
+        localStorage.setItem(`rapp_repair_${storedVin}`, JSON.stringify(res));
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to load repair steps.'))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     const storedVin = localStorage.getItem('rapp_vin');
@@ -61,18 +87,45 @@ export default function RepairPage() {
     setSymptoms(storedSymptoms);
     const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
 
-    api.post<RepairResponse>('/api/repair', {
-      vin: storedVin,
-      symptoms: storedSymptoms,
-      obd_codes: [],
-      tools,
-      stripe_session_id: sessionId,
-      vehicle: parsedVinData,
-    })
-      .then(setRepair)
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to load repair steps.'))
-      .finally(() => setLoading(false));
+    const storedParts = localStorage.getItem(`rapp_parts_${storedVin}`);
+    if (storedParts) {
+      try { setParts(JSON.parse(storedParts)); } catch { /* malformed cache, ignore */ }
+    }
+
+    // Once generated (either warmed in the background from /results, or by
+    // a previous visit here), the guide is permanent -- reloading this page
+    // must never silently re-generate it. Only "Start Over" clears this.
+    const cachedRepair = localStorage.getItem(`rapp_repair_${storedVin}`);
+    if (cachedRepair) {
+      try {
+        setRepair(JSON.parse(cachedRepair));
+        const cachedChecked = localStorage.getItem(`rapp_repair_checked_${storedVin}`);
+        if (cachedChecked) setCheckedSteps(JSON.parse(cachedChecked));
+        setLoading(false);
+        return;
+      } catch {
+        // fall through to a fresh generation if the cached value is malformed
+      }
+    }
+
+    generateAndCache(storedVin, storedSymptoms, tools, sessionId, parsedVinData);
   }, [router]);
+
+  const startOver = () => {
+    if (!vin) return;
+    const confirmed = window.confirm(
+      'Starting over clears your checked-off progress and regenerates this repair guide from scratch. Continue?'
+    );
+    if (!confirmed) return;
+    localStorage.removeItem(`rapp_repair_${vin}`);
+    localStorage.removeItem(`rapp_repair_checked_${vin}`);
+    setCheckedSteps({});
+    setRepair(null);
+    setError(null);
+    const sessionId = localStorage.getItem(`rapp_unlocked_${vin}`) ?? '';
+    const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
+    generateAndCache(vin, symptoms, tools, sessionId, vinData);
+  };
 
   useEffect(() => {
     if (!repair || !vin) return;
@@ -97,7 +150,11 @@ export default function RepairPage() {
     setSavePromptDismissed(true);
   };
 
-  const toggleStep = (idx: number) => setCheckedSteps(prev => ({ ...prev, [idx]: !prev[idx] }));
+  const toggleStep = (idx: number) => setCheckedSteps(prev => {
+    const next = { ...prev, [idx]: !prev[idx] };
+    if (vin) localStorage.setItem(`rapp_repair_checked_${vin}`, JSON.stringify(next));
+    return next;
+  });
 
   // Helper to highlight tools and torque specs in step text
   const formatStepText = (text: string) => {
@@ -140,6 +197,16 @@ export default function RepairPage() {
           >
             ← Back to Results
           </button>
+          {repair && (
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={startOver}
+              style={{ padding: '6px 12px', fontSize: '0.875rem', marginLeft: 8 }}
+            >
+              Start Over
+            </button>
+          )}
         </div>
 
         <header className="page-header">
@@ -175,11 +242,41 @@ export default function RepairPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td>OEM Upgrade/Replacement Component</td>
-                    <td className="price-val-green">$35 – $65</td>
-                    <td>AutoZone / O&apos;Reilly / Amazon</td>
-                  </tr>
+                  {parts.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="text-muted text-sm">
+                        No specific replacement part was identified from your symptoms — see the step-by-step procedure below for part call-outs.
+                      </td>
+                    </tr>
+                  )}
+                  {parts.map((part, i) => {
+                    const prices = part.options.map((o) => o.estimated_price);
+                    const min = Math.min(...prices);
+                    const max = Math.max(...prices);
+                    const budget = part.options.find((o) => o.tier === 'Aftermarket / Budget') ?? part.options[0];
+                    return (
+                      <tr key={i}>
+                        <td>{part.part_name}</td>
+                        <td className="price-val-green">
+                          {min === max ? `$${min.toFixed(2)}` : `$${min.toFixed(2)} – $${max.toFixed(2)}`}
+                        </td>
+                        <td>
+                          {budget ? (
+                            <a
+                              href={budget.purchase_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: 'var(--accent-yellow)', textDecoration: 'none' }}
+                            >
+                              {budget.brand} ↗
+                            </a>
+                          ) : (
+                            "AutoZone / O'Reilly / Amazon"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                   <tr>
                     <td>Dielectric Grease &amp; Shop Rags</td>
                     <td>$5</td>
@@ -350,7 +447,7 @@ export default function RepairPage() {
             </div>
 
             {showSavePrompt && !savePromptDismissed && !authUser && (
-              <SaveGuidePrompt vin={vin} vinData={vinData} symptoms={symptoms} onDismiss={dismissSavePrompt} />
+              <SaveGuidePrompt vin={vin} vinData={vinData} symptoms={symptoms} citations={repair.citations} onDismiss={dismissSavePrompt} />
             )}
 
             {/* Clickable RAG citations */}

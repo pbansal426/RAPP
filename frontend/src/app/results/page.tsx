@@ -118,13 +118,40 @@ export default function ResultsPage() {
       tools,
       vehicle: parsedVehicle,
     })
-      .then(setDiagnosis)
+      .then((res) => {
+        setDiagnosis(res);
+        // Persisted so /repair can render real parts data instead of
+        // placeholder text -- see rapp_parts_{vin} in repair/page.tsx.
+        localStorage.setItem(`rapp_parts_${storedVin}`, JSON.stringify(res.recommended_parts ?? []));
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Diagnosis failed.'))
       .finally(() => setLoading(false));
   }, [router]);
 
+  // Best-effort background warm-up: fired the moment the user shows purchase
+  // intent (clicking Unlock), not on every free diagnosis, so it doesn't
+  // burn the shared Gemini free-tier quota on visitors who never pay. Once
+  // real Stripe Checkout replaces the mock redirect, this is what lets
+  // /repair load instantly instead of generating the guide after payment.
+  const pregenerateRepairGuide = () => {
+    if (!vin || localStorage.getItem(`rapp_repair_${vin}`)) return;
+    const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
+    const obdCodes = JSON.parse(localStorage.getItem('rapp_obd_codes') ?? '[]') as string[];
+    api.post<{ repair_steps: string[]; citations: string[] }>('/api/repair', {
+      vin,
+      symptoms,
+      obd_codes: obdCodes,
+      tools,
+      stripe_session_id: 'pregenerate-on-intent',
+      vehicle: vinData,
+    })
+      .then((res) => localStorage.setItem(`rapp_repair_${vin}`, JSON.stringify(res)))
+      .catch(() => { /* best-effort only -- /repair falls back to its own fetch */ });
+  };
+
   const handlePay = async () => {
     setPayLoading(true);
+    pregenerateRepairGuide();
     try {
       const { checkout_url } = await api.post<CheckoutResponse>('/api/payments/create-checkout', {
         vin,
