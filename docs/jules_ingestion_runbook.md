@@ -119,35 +119,53 @@ Hard rules -- do not deviate from these:
   a comment/note) rather than guessing at a fix.
 ```
 
-## Proposed starter batch (fill in before handing to Jules)
+## Starter batch — finalized, sourced (fill into the task block above)
 
 Already ingested, do NOT repeat: 2010 Toyota Corolla, 2015 Toyota
 Highlander, 2018 Honda Civic, 2018 Honda Accord, 2018 Toyota Camry, 2018
 Ford F-150, 2025 Lexus ES.
 
-A reasonable next batch, chosen for high real-world relevance (top-selling
-US models, spread across manufacturers not yet covered) and small enough
-to stay comfortably within a single safe iteration:
+Cross-checked two independent sources: iSeeCars' analysis of 9M+ used-car
+sales (2020-2025 model years, measures actual on-road commonality) and
+full-year-2025 new-vehicle sales rankings (current market weight). Sized
+at 20 vehicles x ~17MB (measured rate) ~= 340MB -- trivial against Git LFS's
+10GB free tier (currently ~115MB used).
 
-| Year | Make | Model |
-|------|------|-------|
-| 2020 | Toyota | RAV4 |
-| 2020 | Honda | CR-V |
-| 2020 | Ford | Explorer |
-| 2020 | Nissan | Rogue |
-| 2020 | Nissan | Altima |
-| 2020 | Jeep | Grand Cherokee |
-| 2020 | Subaru | Outback |
-| 2020 | Chevrolet | Equinox |
-| 2020 | GMC | Sierra |
-| 2020 | Hyundai | Elantra |
-| 2020 | Kia | Sorento |
-| 2020 | Ram | 1500 |
+| Year | Make | Model | Source |
+|------|------|-------|--------|
+| 2021 | Chevrolet | Silverado 1500 | iSeeCars #2, 2025 sales #2 |
+| 2021 | Ram | 1500 | iSeeCars #3 |
+| 2021 | Chevrolet | Equinox | iSeeCars #4, 2025 sales #4 |
+| 2021 | Nissan | Rogue | iSeeCars #5, 2025 sales #11 |
+| 2021 | Ford | Explorer | iSeeCars #7, 2025 sales #10 |
+| 2021 | Chevrolet | Malibu | iSeeCars #8 |
+| 2021 | Toyota | Tacoma | iSeeCars #10 |
+| 2021 | Toyota | RAV4 | iSeeCars #11, 2025 sales #1 |
+| 2021 | GMC | Sierra 1500 | iSeeCars #12, 2025 sales #6 |
+| 2021 | Nissan | Altima | iSeeCars #13 |
+| 2021 | Honda | CR-V | iSeeCars #15, 2025 sales #4 |
+| 2021 | Jeep | Grand Cherokee | iSeeCars #16, 2025 sales #9 |
+| 2021 | Hyundai | Tucson | iSeeCars #17, 2025 sales #13 |
+| 2021 | Ford | Escape | iSeeCars #18 |
+| 2021 | Ford | Edge | iSeeCars #19 |
+| 2021 | Chevrolet | Traverse | 2025 sales |
+| 2021 | Chevrolet | Trax | 2025 sales |
+| 2021 | Chevrolet | Tahoe | 2025 sales |
+| 2021 | Kia | Sportage | 2025 sales |
+| 2021 | Mazda | CX-5 | 2025 sales |
 
-**Review and edit this list before handing it off** — this is a starting
-proposal, not a final decision. Swap years/models as you see fit; the
-runbook's per-vehicle NHTSA-naming-retry logic and the 5GB stop condition
-apply regardless of what you put here.
+**Honest caveat on the year column**: 2021 was picked as a reasonable
+default (recent enough for real TSB volume to have accumulated -- a 2025
+model year returned only 32 records for the ES, vs. hundreds for
+older-year vehicles; old enough to sit within each model's current
+generation for most of these). Individual generation-redesign years were
+NOT independently verified per model. If a specific year turns out to be
+on the wrong side of a mid-cycle redesign, that's a minor re-run via
+`--reset-vehicle`, not a disaster -- the runbook's NHTSA-naming-retry
+logic and 5GB stop condition apply regardless.
+
+**Review and edit this list before handing it off** — this is a
+well-sourced starting proposal, not a final decision you're locked into.
 
 ## What "national scope" would require instead (not this runbook)
 
