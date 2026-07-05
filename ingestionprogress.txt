@@ -1,0 +1,2 @@
+View ingestion progress at this path
+/Users/prathambansal/Dev/RAPP/.claude/worktrees/generic-dancing-blum/docs/ingestion_status.md

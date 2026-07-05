@@ -18,6 +18,8 @@ htmlcov/
 coverage.xml
 *.log
 data/
+data
+data.bak_*
 
 # Environment secrets — never commit these
 .env
