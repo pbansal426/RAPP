@@ -79,6 +79,118 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  e2e-real-backend:
+    name: E2E — Playwright against real backend + real frontend
+    runs-on: ubuntu-latest
+    needs: backend-quality
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: uv sync --no-group dev
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install frontend deps
+        run: pnpm install
+        working-directory: frontend
+
+      - name: Install root Playwright deps
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # ENVIRONMENT=test forces backend/core/config.py's Settings.is_test_mode,
+      # which in turn forces MockVectorStore (backend/rag/__init__.py) and a
+      # None Gemini client (backend/services/gemini.py's get_genai_client) --
+      # this job must NEVER dial out to live Gemini or a real ChromaDB.
+      # GEMINI_API_KEY is deliberately left unset (no secret referenced here).
+      # DATABASE_URL points outside the repo so this never touches data/.
+      - name: Start real backend (test mode)
+        env:
+          ENVIRONMENT: test
+          VECTOR_STORE: mock
+          DATABASE_URL: "sqlite:////tmp/rapp_ci_real_backend.db"
+          ALLOWED_ORIGINS: "http://localhost:3100,http://127.0.0.1:3100"
+        run: |
+          uv run uvicorn backend.main:app --host 127.0.0.1 --port 8100 > backend.log 2>&1 &
+          echo $! > backend.pid
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8100/health > /dev/null; then
+              echo "Backend is up."
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Backend failed to start within timeout." >&2
+              cat backend.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Start real frontend (dev server)
+        env:
+          NEXT_PUBLIC_API_URL: "http://127.0.0.1:8100"
+        run: |
+          ./node_modules/.bin/next dev -p 3100 > ../frontend.log 2>&1 &
+          echo $! > ../frontend.pid
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:3100 > /dev/null; then
+              echo "Frontend is up."
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "Frontend failed to start within timeout." >&2
+              cat ../frontend.log
+              exit 1
+            fi
+            sleep 1
+          done
+        working-directory: frontend
+
+      - name: Run real-backend smoke test
+        env:
+          FRONTEND_URL: "http://127.0.0.1:3100"
+        run: npx playwright test --config=playwright.real-backend.config.ts
+
+      - name: Stop real backend & frontend
+        if: always()
+        run: |
+          kill "$(cat backend.pid)" 2>/dev/null || true
+          kill "$(cat frontend.pid)" 2>/dev/null || true
+
+      - name: Upload backend/frontend logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-backend-logs
+          path: |
+            backend.log
+            frontend.log
+          retention-days: 7
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-real-backend
+          path: playwright-report/
+          retention-days: 7
+
   frontend-build:
     name: Frontend — TypeScript & Build Check
     runs-on: ubuntu-latest
