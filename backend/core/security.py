@@ -54,7 +54,9 @@ def create_reset_token(user_id: str) -> str:
 
 
 def create_verify_token(user_id: str) -> str:
-    return _create_token({"sub": user_id, "type": "verify"}, VERIFY_TOKEN_EXPIRE_MINUTES)
+    return _create_token(
+        {"sub": user_id, "type": "verify"}, VERIFY_TOKEN_EXPIRE_MINUTES
+    )
 
 
 def decode_token(token: str, expected_type: str) -> dict[str, Any] | None:

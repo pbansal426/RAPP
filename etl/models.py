@@ -19,7 +19,7 @@ class VehicleKey:
 
         Key order and shape are load-bearing for the retrieval layer:
         ``{"year": 2010, "make": "Toyota", "model": "Corolla", "type": ...}``.
-        
+
         Additional metadata fields for enhanced filtering:
         - component_category, component_name, component_location
         - procedure_type, difficulty_level, estimated_time_minutes
