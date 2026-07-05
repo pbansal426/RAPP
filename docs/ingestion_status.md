@@ -20,7 +20,7 @@ exercises directly (see CLAUDE.md), so those are top priority.
 | — | Toyota | RAV4 | ⬜ Queued (added 2026-07-05) | — | — | — | — | — | — |
 | — | Honda | CR-V | ⬜ Queued (added 2026-07-05) | — | — | — | — | — | — |
 | — | Ford | Explorer | ⬜ Queued (added 2026-07-05) | — | — | — | — | — | — |
-| — | Ram | 1500 | ⬜ Queued (added 2026-07-05) | — | — | — | — | — | — |
+| 2025 | Lexus | ES300h | ⬜ Queued (added 2026-07-05, swapped in for Ram 1500 — user has direct access to this vehicle for testing) | — | — | — | — | — | — |
 
 ## Live progress
 
