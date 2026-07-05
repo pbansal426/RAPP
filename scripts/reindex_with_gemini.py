@@ -55,7 +55,8 @@ def reindex_with_gemini() -> bool:
     try:
         # In ChromaDB 0.5.x, 'ids' is always returned and invalid in `include` list
         results = getattr(store, "collection").get(  # noqa: B009
-        include=["documents", "metadatas"])
+            include=["documents", "metadatas"]
+        )
         logger.info(f"Retrieved {len(results['ids'])} documents")
     except Exception as e:
         logger.error(f"Failed to retrieve documents: {e}")

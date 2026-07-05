@@ -46,7 +46,6 @@ def chunks_to_documents(
         chunk_idx = table_chunk.provenance.get("chunk_index", 0)
         table_data = table_chunk.table
 
-
         # Serialize table to Markdown
         headers = table_data.get("headers", [])
         rows = table_data.get("rows", [])

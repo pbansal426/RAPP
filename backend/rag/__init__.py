@@ -7,6 +7,7 @@ from backend.rag.vector_store import ChromaVectorStore, MockVectorStore, VectorS
 # ChromaDB connection pools on every request.
 _vector_store_instance: VectorStore | None = None
 
+
 def get_vector_store() -> VectorStore:
     """
     Get or create the singleton VectorStore instance.
@@ -23,10 +24,10 @@ def get_vector_store() -> VectorStore:
         else:
             db_path = os.environ.get("CHROMA_DB_PATH", "./data/chroma_db")
             _vector_store_instance = ChromaVectorStore(
-                persistent_path=db_path,
-                collection_name="repair_manuals"
+                persistent_path=db_path, collection_name="repair_manuals"
             )
 
     return _vector_store_instance
+
 
 __all__ = ["retrieve", "get_vector_store", "VectorStore"]

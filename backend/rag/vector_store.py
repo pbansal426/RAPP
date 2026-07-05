@@ -101,7 +101,9 @@ class ChromaVectorStore(VectorStore):
                     )
                     self.use_gemini_embeddings = False
 
-        self.collection: Any = self.client.get_or_create_collection(name=collection_name)
+        self.collection: Any = self.client.get_or_create_collection(
+            name=collection_name
+        )
 
     @retry(
         retry=retry_if_exception_type(Exception),
@@ -166,9 +168,7 @@ class ChromaVectorStore(VectorStore):
                     if isinstance(v, str):
                         v = v.upper()
                     elif isinstance(v, list):
-                        v = [
-                            val.upper() if isinstance(val, str) else val for val in v
-                        ]
+                        v = [val.upper() if isinstance(val, str) else val for val in v]
 
                 if isinstance(v, str | int | float | bool):
                     flat_metadata[k] = v
@@ -305,9 +305,7 @@ class MockVectorStore(VectorStore):
                     if isinstance(v, str):
                         v = v.upper()
                     elif isinstance(v, list):
-                        v = [
-                            val.upper() if isinstance(val, str) else val for val in v
-                        ]
+                        v = [val.upper() if isinstance(val, str) else val for val in v]
 
                 if isinstance(v, str | int | float | bool):
                     flat_metadata[k] = v
