@@ -3,8 +3,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, status
 
 from backend.routers.vin import decode_vin_internal
-from backend.schemas import RepairRequest, RepairResponse
-from backend.services.llm import generate_repair_procedure
+from backend.schemas import (
+    RepairChatRequest,
+    RepairChatResponse,
+    RepairRequest,
+    RepairResponse,
+)
+from backend.services.llm import generate_chat_reply, generate_repair_procedure
 
 router = APIRouter()
 
@@ -52,3 +57,30 @@ async def repair(request: RepairRequest) -> RepairResponse:
     )
 
     return RepairResponse(repair_steps=repair_steps, citations=citations)
+
+
+@router.post("/api/repair/chat", response_model=RepairChatResponse)
+async def repair_chat(request: RepairChatRequest) -> RepairChatResponse:
+    if not request.stripe_session_id or not request.stripe_session_id.strip():
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Payment Required: stripe_session_id is required.",
+        )
+
+    vin_meta: dict[str, Any]
+    if request.vehicle and request.vehicle.make:
+        vin_meta = {
+            "year": str(request.vehicle.year or ""),
+            "make": request.vehicle.make,
+            "model": request.vehicle.model or "",
+        }
+    else:
+        vin_meta = await decode_vin_internal(request.vin)
+
+    reply = await generate_chat_reply(
+        vin_meta=vin_meta,
+        symptoms=request.symptoms,
+        repair_steps=request.repair_steps,
+        message=request.message,
+    )
+    return RepairChatResponse(reply=reply)

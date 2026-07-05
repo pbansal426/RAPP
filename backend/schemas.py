@@ -121,6 +121,26 @@ class RepairResponse(BaseModel):
     citations: list[str]
 
 
+class RepairChatRequest(BaseModel):
+    """Context for one chat turn in the repair-guide side panel. The client
+    sends the exact repair_steps already shown (not just vin/symptoms) so the
+    reply is grounded in the same procedure the user is looking at, rather
+    than a fresh, possibly-different RAG query."""
+
+    vin: str
+    vehicle: VehicleInfo | None = None
+    symptoms: str
+    repair_steps: list[str]
+    message: str
+    stripe_session_id: str
+
+
+class RepairChatResponse(BaseModel):
+    # None means Gemini is unavailable/failed/quota-exhausted -- the client
+    # falls back to its own local canned response rather than erroring.
+    reply: str | None
+
+
 class CheckoutRequest(BaseModel):
     vin: str
     price_type: str = "single"

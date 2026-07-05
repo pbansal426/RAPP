@@ -186,3 +186,35 @@ async def generate_repair_procedure(
         return gemini_steps, citations
 
     return repair_steps, citations
+
+
+_CHAT_SYSTEM_PROMPT = (
+    "You are the RAPP Garage Assistant, embedded in a repair guide the user "
+    "is actively following. Answer ONLY using the repair procedure text "
+    "provided below -- do not invent torque specs, tool sizes, or steps not "
+    "present in it. If the user asks something the procedure doesn't cover, "
+    "say so plainly and suggest they consult their vehicle's official "
+    "service documentation or a qualified technician, rather than guessing. "
+    "Keep replies short (2-4 sentences) and conversational."
+)
+
+
+async def generate_chat_reply(
+    vin_meta: dict[str, Any],
+    symptoms: str,
+    repair_steps: list[str],
+    message: str,
+) -> str | None:
+    """Answer one repair-guide chat message, grounded strictly in the exact
+    procedure already shown to the user -- not a fresh RAG query, since the
+    point is to stay consistent with what's on screen, not introduce a
+    second, possibly different, source of truth. Returns None if Gemini is
+    unavailable/fails; the caller falls back to its own canned reply."""
+    procedure_text = "\n".join(f"{i + 1}. {s}" for i, s in enumerate(repair_steps))
+    prompt = (
+        f"Vehicle: {vin_meta.get('year')} {vin_meta.get('make')} {vin_meta.get('model')}.\n"
+        f"Symptoms: {symptoms}.\n\n"
+        f"Repair procedure the user is following:\n{procedure_text}\n\n"
+        f"User's question: {message}"
+    )
+    return await call_gemini_text(prompt, system_prompt=_CHAT_SYSTEM_PROMPT)

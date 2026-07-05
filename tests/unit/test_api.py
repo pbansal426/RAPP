@@ -662,3 +662,62 @@ def test_sanitize_and_check_digit_helpers():
     assert _vin_check_digit_valid("1HGBH41JXMN109186") is True
     assert _vin_check_digit_valid("1HGBH41JXMN109187") is False
 
+
+def test_repair_chat_requires_payment(client):
+    payload = {
+        "vin": "1HGBH41JXMN109186",
+        "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
+        "symptoms": "squeaking brakes",
+        "repair_steps": ["Torque the caliper bolts to 25 ft-lbs."],
+        "message": "what socket do I need?",
+        "stripe_session_id": "",
+    }
+    response = client.post("/api/repair/chat", json=payload)
+    assert response.status_code == 402
+
+
+def test_repair_chat_grounded_reply(client, monkeypatch):
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+
+    mock_response = MagicMock()
+    mock_response.text = "Use a 14mm socket, per the procedure above."
+    mock_generate_content = AsyncMock(return_value=mock_response)
+
+    with patch("backend.services.gemini.get_genai_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = mock_generate_content
+        mock_get_client.return_value = mock_client
+
+        payload = {
+            "vin": "1HGBH41JXMN109186",
+            "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
+            "symptoms": "squeaking brakes",
+            "repair_steps": ["Use a 14mm socket to remove the caliper slide pin bolts."],
+            "message": "what socket do I need?",
+            "stripe_session_id": "cs_test_123",
+        }
+        response = client.post("/api/repair/chat", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["reply"] == "Use a 14mm socket, per the procedure above."
+    mock_generate_content.assert_called_once()
+    config = mock_generate_content.call_args.kwargs["config"]
+    assert "ONLY using the repair procedure" in config.system_instruction
+    assert "14mm socket" in mock_generate_content.call_args.kwargs["contents"]
+
+
+def test_repair_chat_no_key_returns_none_reply(client, monkeypatch):
+    monkeypatch.setattr(settings, "gemini_api_key", None)
+
+    payload = {
+        "vin": "1HGBH41JXMN109186",
+        "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
+        "symptoms": "squeaking brakes",
+        "repair_steps": ["Torque the caliper bolts to 25 ft-lbs."],
+        "message": "what socket do I need?",
+        "stripe_session_id": "cs_test_123",
+    }
+    response = client.post("/api/repair/chat", json=payload)
+    assert response.status_code == 200
+    assert response.json()["reply"] is None
+
