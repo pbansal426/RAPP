@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import PartsPurchasePlan from './PartsPurchasePlan';
-import { signUp } from '@/lib/auth';
-import { saveRepair } from '@/lib/repairs';
+import { requestMagicLink, useAuthUser } from '@/lib/auth';
+import { completePendingSave, storePendingSave } from '@/lib/pendingSave';
 import {
   HandToolsIcon,
   SocketSetIcon,
@@ -50,23 +50,30 @@ export default function ResultsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [ownedTools, setOwnedTools] = useState<string[]>([]);
+  const { user: authUser } = useAuthUser();
 
-  // Garage Vault Sign-up State
+  // Garage Vault Sign-up State (magic-link -- see SaveGuidePrompt.tsx for
+  // why this can't complete synchronously)
   const [garageEmail, setGarageEmail] = useState('');
-  const [garagePassword, setGaragePassword] = useState('');
   const [garageName, setGarageName] = useState('');
   const [garageSubmitting, setGarageSubmitting] = useState(false);
   const [garageError, setGarageError] = useState<string | null>(null);
+  const [garageSent, setGarageSent] = useState(false);
+  const [garageDevLink, setGarageDevLink] = useState<string | null>(null);
   const [garageSaved, setGarageSaved] = useState(false);
 
+  useEffect(() => {
+    if (!authUser || !vin) return;
+    completePendingSave(vin).then((saved) => { if (saved) setGarageSaved(true); });
+  }, [authUser, vin]);
+
   const handleGarageSignUp = async () => {
-    if (!garageEmail.trim() || !garagePassword.trim()) return;
+    if (!garageEmail.trim()) return;
     setGarageSubmitting(true);
     setGarageError(null);
     try {
-      await signUp(garageEmail.trim(), garagePassword, garageName.trim() || undefined);
       const paymentSessionId = localStorage.getItem(`rapp_unlocked_${vin}`) ?? undefined;
-      await saveRepair({
+      storePendingSave(vin, {
         vin,
         year: vinData ? String(vinData.year ?? '') : undefined,
         make: vinData ? String(vinData.make ?? '') : undefined,
@@ -76,9 +83,11 @@ export default function ResultsPage() {
         symptoms,
         paymentSessionId,
       });
-      setGarageSaved(true);
+      const res = await requestMagicLink(garageEmail.trim(), garageName.trim() || undefined);
+      setGarageSent(true);
+      setGarageDevLink(res.magicLink);
     } catch (err) {
-      setGarageError(err instanceof Error ? err.message : 'Could not create your account. Please try again.');
+      setGarageError(err instanceof Error ? err.message : 'Could not send a sign-in link. Please try again.');
     } finally {
       setGarageSubmitting(false);
     }
@@ -422,11 +431,28 @@ export default function ResultsPage() {
             </div>
             <a href="/garage" className="btn btn-secondary" style={{ width: 'auto', padding: '0 18px', marginTop: 8 }}>Go to My Garage →</a>
           </div>
+        ) : garageSent ? (
+          <div style={{ marginTop: 10 }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: 4 }}>Check Your Email</h3>
+            <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
+              We sent a sign-in link to {garageEmail.trim()}. Click it to finish saving to your garage.
+            </p>
+            {garageDevLink && (
+              <>
+                <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
+                  No email provider is configured for this environment — use the link below directly.
+                </p>
+                <a href={garageDevLink} className="btn btn-primary" style={{ width: 'auto', padding: '0 18px' }}>
+                  Sign In &amp; Save →
+                </a>
+              </>
+            )}
+          </div>
         ) : (
           <div style={{ marginTop: 10 }}>
             <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: 4 }}>Save to My Garage &amp; Keep Guide Forever</h3>
             <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
-              Create a free account to permanently archive your vehicle profile, diagnostic guide, and payment preferences.
+              Get a free account (no password, just email) to permanently archive your vehicle profile, diagnostic guide, and payment preferences.
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 380 }}>
@@ -446,22 +472,14 @@ export default function ResultsPage() {
                 onChange={(e) => setGarageEmail(e.target.value)}
                 style={{ padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
               />
-              <input
-                className="input"
-                type="password"
-                placeholder="Password"
-                value={garagePassword}
-                onChange={(e) => setGaragePassword(e.target.value)}
-                style={{ padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
-              />
               {garageError && <p style={{ color: 'var(--accent-red)', fontSize: '0.85rem', margin: 0 }}>{garageError}</p>}
               <button
                 className="btn btn-primary"
                 onClick={handleGarageSignUp}
-                disabled={garageSubmitting || !garageEmail.trim() || !garagePassword.trim()}
+                disabled={garageSubmitting || !garageEmail.trim()}
                 style={{ marginTop: 6, minHeight: 40 }}
               >
-                {garageSubmitting ? <><span className="loading-spinner" aria-hidden="true" /> Saving…</> : 'Save to My Garage'}
+                {garageSubmitting ? <><span className="loading-spinner" aria-hidden="true" /> Sending…</> : 'Send Sign-In Link & Save'}
               </button>
             </div>
           </div>

@@ -159,22 +159,30 @@ class VinOcrResponse(BaseModel):
 # --- Auth / user accounts ---
 
 
-class SignupRequest(BaseModel):
+class RequestLinkRequest(BaseModel):
     email: str
-    password: str
+    # Only used the first time this email signs in (creates the account);
+    # ignored on subsequent requests for an existing account.
     display_name: str | None = None
 
 
-class LoginRequest(BaseModel):
-    email: str
-    password: str
+class RequestLinkResponse(BaseModel):
+    message: str
+    # Dev-mode only: populated when no email provider (Resend) is
+    # configured, so the link is returned directly instead of emailed. Drop
+    # this field once RESEND_API_KEY is set in every environment that needs
+    # real delivery -- see backend/services/email.py.
+    magic_link: str | None = None
+
+
+class VerifyLinkRequest(BaseModel):
+    token: str
 
 
 class UserResponse(BaseModel):
     id: str
     email: str
     display_name: str | None = None
-    email_verified: bool = False
 
 
 class AuthResponse(BaseModel):
@@ -184,33 +192,6 @@ class AuthResponse(BaseModel):
 
 class UpdateAccountRequest(BaseModel):
     display_name: str | None = None
-
-
-class ForgotPasswordRequest(BaseModel):
-    email: str
-
-
-class ForgotPasswordResponse(BaseModel):
-    message: str
-    # Dev-mode only: no email provider is configured, so the reset link is
-    # returned directly instead of emailed. Drop this field once a real
-    # email provider (Resend/Postmark/SendGrid/...) is wired up.
-    reset_link: str | None = None
-
-
-class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str
-
-
-class SendVerificationResponse(BaseModel):
-    message: str
-    # Dev-mode only: see ForgotPasswordResponse.reset_link.
-    verify_link: str
-
-
-class VerifyEmailRequest(BaseModel):
-    token: str
 
 
 # --- Saved repairs ---

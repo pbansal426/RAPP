@@ -9,6 +9,7 @@ import ChatPanel from './ChatPanel';
 import ConclusionPhase from './ConclusionPhase';
 import SaveGuidePrompt from './SaveGuidePrompt';
 import { useAuthUser } from '@/lib/auth';
+import { completePendingSave } from '@/lib/pendingSave';
 import type { RecommendedPart } from '@/lib/types';
 import {
   AppLogoMarkIcon,
@@ -43,6 +44,7 @@ export default function RepairPage() {
   const [parts, setParts] = useState<RecommendedPart[]>([]);
   const [showSavePrompt, setShowSavePrompt] = useState(false);
   const [savePromptDismissed, setSavePromptDismissed] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const conclusionRef = useRef<HTMLDivElement>(null);
   const { user: authUser } = useAuthUser();
 
@@ -126,6 +128,21 @@ export default function RepairPage() {
     const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
     generateAndCache(vin, symptoms, tools, sessionId, vinData);
   };
+
+  // Magic-link auth can't authenticate synchronously (see SaveGuidePrompt),
+  // so the actual saveRepair() call for a guide requested-to-be-saved
+  // completes here, whenever this page loads with both a signed-in user
+  // and a matching pending-save entry -- whether that's an immediate
+  // redirect back from /verify-email or a later visit from any device.
+  useEffect(() => {
+    if (!authUser || !vin) return;
+    completePendingSave(vin).then((saved) => {
+      if (saved) {
+        setJustSaved(true);
+        setSavePromptDismissed(true);
+      }
+    });
+  }, [authUser, vin]);
 
   useEffect(() => {
     if (!repair || !vin) return;
@@ -446,7 +463,17 @@ export default function RepairPage() {
               })()}
             </div>
 
-            {showSavePrompt && !savePromptDismissed && !authUser && (
+            {justSaved && (
+              <div className="card" style={{ border: '1px solid var(--accent-orange)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <CheckCircleIcon size={18} style={{ color: '#4ade80' }} />
+                  <span style={{ fontWeight: 700 }}>Saved to your garage.</span>
+                </div>
+                <a href="/garage" className="btn btn-secondary" style={{ width: 'auto', padding: '0 18px', marginTop: 10 }}>Go to My Garage →</a>
+              </div>
+            )}
+
+            {showSavePrompt && !savePromptDismissed && !authUser && !justSaved && (
               <SaveGuidePrompt vin={vin} vinData={vinData} symptoms={symptoms} citations={repair.citations} onDismiss={dismissSavePrompt} />
             )}
 

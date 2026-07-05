@@ -2,27 +2,31 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { logIn } from '@/lib/auth';
-import { AppLogoMarkIcon } from '@/app/sharedIcons';
+import { requestMagicLink } from '@/lib/auth';
+import { AppLogoMarkIcon, CheckCircleIcon } from '@/app/sharedIcons';
 
 function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
+  const [devLink, setDevLink] = useState<string | null>(null);
+
+  const next = searchParams.get('next');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) return;
+    if (!email.trim()) return;
     setSubmitting(true);
     setError(null);
     try {
-      await logIn(email.trim(), password);
-      router.push(searchParams.get('next') || '/garage');
+      const res = await requestMagicLink(email.trim());
+      setSent(true);
+      setDevLink(res.magicLink ? `${res.magicLink}${next ? `&next=${encodeURIComponent(next)}` : ''}` : null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not log in. Please try again.');
+      setError(err instanceof Error ? err.message : 'Could not send a sign-in link. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -43,50 +47,53 @@ function SignInForm() {
 
       <header className="page-header">
         <div className="logo"><AppLogoMarkIcon size={20} /><span>RAPP</span></div>
-        <h1 className="page-title">Log In</h1>
-        <p className="page-subtitle">Access your garage and saved repair guides.</p>
+        <h1 className="page-title">Sign In</h1>
+        <p className="page-subtitle">No password needed — we&apos;ll email you a one-click sign-in link.</p>
       </header>
 
-      <form className="card" onSubmit={handleSubmit}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <label htmlFor="signin-email" className="sr-only">Email</label>
-          <input
-            id="signin-email"
-            className="input"
-            type="email"
-            placeholder="Email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <label htmlFor="signin-password" className="sr-only">Password</label>
-          <input
-            id="signin-password"
-            className="input"
-            type="password"
-            placeholder="Password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          {error && <p style={{ color: 'var(--accent-red)', fontSize: '0.85rem' }}>{error}</p>}
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={submitting || !email.trim() || !password.trim()}
-          >
-            {submitting ? <><span className="loading-spinner" aria-hidden="true" /> Logging in…</> : 'Log In'}
-          </button>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-            <a href="/signup" className="text-muted text-sm" style={{ textDecoration: 'none' }}>
-              New here? Create an account
-            </a>
-            <a href="/forgot-password" className="text-muted text-sm" style={{ textDecoration: 'none' }}>
-              Forgot password?
-            </a>
+      <div className="card">
+        {sent ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', textAlign: 'center' }}>
+            <CheckCircleIcon size={28} style={{ color: '#4ade80' }} />
+            <p style={{ fontWeight: 700 }}>Check your email</p>
+            <p className="text-muted text-sm">We sent a sign-in link to {email.trim()}.</p>
+            {devLink && (
+              <>
+                <p className="text-muted text-sm">No email provider is configured for this environment — use the link below directly.</p>
+                <a href={devLink} className="btn btn-primary" style={{ width: 'auto', padding: '0 18px' }}>
+                  Sign In →
+                </a>
+              </>
+            )}
           </div>
-        </div>
-      </form>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <label htmlFor="signin-email" className="sr-only">Email</label>
+              <input
+                id="signin-email"
+                className="input"
+                type="email"
+                placeholder="Email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              {error && <p style={{ color: 'var(--accent-red)', fontSize: '0.85rem' }}>{error}</p>}
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={submitting || !email.trim()}
+              >
+                {submitting ? <><span className="loading-spinner" aria-hidden="true" /> Sending…</> : 'Send Sign-In Link'}
+              </button>
+              <p className="text-muted text-sm" style={{ textAlign: 'center', marginTop: 4 }}>
+                New here? Just enter your email — your account is created automatically.
+              </p>
+            </div>
+          </form>
+        )}
+      </div>
     </main>
   );
 }

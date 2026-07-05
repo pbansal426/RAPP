@@ -32,87 +32,73 @@ def client():
     app.dependency_overrides.pop(get_db, None)
 
 
-def test_signup_returns_token_and_user(client):
+def _request_and_extract_token(client, email: str) -> str:
+    """No RESEND_API_KEY is set in tests, so request-link always returns the
+    magic link directly (dev-mode) instead of emailing it."""
+    response = client.post("/api/auth/request-link", json={"email": email})
+    assert response.status_code == 200
+    magic_link = response.json()["magic_link"]
+    assert magic_link
+    return magic_link.split("token=")[1]
+
+
+def test_request_link_creates_account_on_first_request(client):
     response = client.post(
-        "/api/auth/signup",
-        json={"email": "New@Example.com", "password": "hunter2", "display_name": "New"},
+        "/api/auth/request-link",
+        json={"email": "New@Example.com", "display_name": "New"},
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["token"]
-    assert data["user"]["email"] == "new@example.com"
-    assert data["user"]["display_name"] == "New"
-    assert data["user"]["id"]
+    assert data["magic_link"]
+    assert "token=" in data["magic_link"]
 
 
-def test_signup_requires_email_and_password(client):
-    response = client.post(
-        "/api/auth/signup", json={"email": "", "password": "hunter2"}
-    )
-    assert response.status_code == 422
-
-    response = client.post(
-        "/api/auth/signup", json={"email": "a@b.com", "password": ""}
-    )
+def test_request_link_rejects_invalid_email(client):
+    response = client.post("/api/auth/request-link", json={"email": "not-an-email"})
     assert response.status_code == 422
 
 
-def test_signup_duplicate_email_returns_400(client):
-    payload = {"email": "dupe@example.com", "password": "hunter2"}
-    first = client.post("/api/auth/signup", json=payload)
-    assert first.status_code == 200
-
-    second = client.post("/api/auth/signup", json=payload)
-    assert second.status_code == 400
-
-
-def test_signup_email_is_case_insensitive_for_duplicates(client):
-    client.post("/api/auth/signup", json={"email": "Case@Example.com", "password": "x"})
-    second = client.post(
-        "/api/auth/signup", json={"email": "case@example.com", "password": "y"}
-    )
-    assert second.status_code == 400
-
-
-def test_login_success(client):
-    client.post(
-        "/api/auth/signup", json={"email": "login@example.com", "password": "hunter2"}
-    )
-    response = client.post(
-        "/api/auth/login",
-        json={"email": "login@example.com", "password": "hunter2"},
-    )
+def test_verify_link_returns_token_and_user(client):
+    token = _request_and_extract_token(client, "verify@example.com")
+    response = client.post("/api/auth/verify-link", json={"token": token})
     assert response.status_code == 200
-    assert response.json()["token"]
+    data = response.json()
+    assert data["token"]
+    assert data["user"]["email"] == "verify@example.com"
 
 
-def test_login_wrong_password_returns_401(client):
-    client.post(
-        "/api/auth/signup", json={"email": "login2@example.com", "password": "hunter2"}
-    )
-    response = client.post(
-        "/api/auth/login",
-        json={"email": "login2@example.com", "password": "wrong"},
-    )
+def test_verify_link_same_email_reuses_existing_account(client):
+    token1 = _request_and_extract_token(client, "same@example.com")
+    user1 = client.post("/api/auth/verify-link", json={"token": token1}).json()["user"]
+
+    token2 = _request_and_extract_token(client, "Same@Example.com")
+    user2 = client.post("/api/auth/verify-link", json={"token": token2}).json()["user"]
+
+    assert user1["id"] == user2["id"]
+
+
+def test_verify_link_invalid_token_returns_401(client):
+    response = client.post("/api/auth/verify-link", json={"token": "not-a-real-token"})
     assert response.status_code == 401
 
 
-def test_login_unknown_email_returns_401(client):
-    response = client.post(
-        "/api/auth/login",
-        json={"email": "nobody@example.com", "password": "whatever"},
-    )
+def test_verify_link_rejects_an_access_token(client):
+    # Tokens are scoped by a `type` claim -- an access token must not work
+    # as a magic-link-verify token even though both are signed with the
+    # same secret.
+    token = _request_and_extract_token(client, "scoped@example.com")
+    access_token = client.post("/api/auth/verify-link", json={"token": token}).json()["token"]
+
+    response = client.post("/api/auth/verify-link", json={"token": access_token})
     assert response.status_code == 401
 
 
 def test_me_with_valid_token(client):
-    signup = client.post(
-        "/api/auth/signup", json={"email": "me@example.com", "password": "hunter2"}
-    )
-    token = signup.json()["token"]
+    token = _request_and_extract_token(client, "me@example.com")
+    access_token = client.post("/api/auth/verify-link", json={"token": token}).json()["token"]
 
     response = client.get(
-        "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
+        "/api/auth/me", headers={"Authorization": f"Bearer {access_token}"}
     )
     assert response.status_code == 200
     assert response.json()["email"] == "me@example.com"
@@ -133,10 +119,24 @@ def test_me_with_invalid_token_returns_401(client):
     assert response.status_code == 401
 
 
-def test_password_is_hashed_not_stored_in_plaintext():
-    from backend.core.security import get_password_hash, verify_password
+def test_me_rejects_a_verify_token(client):
+    # The inverse of test_verify_link_rejects_an_access_token: a magic-link
+    # token must not work as a session token either.
+    verify_token = _request_and_extract_token(client, "scoped2@example.com")
+    response = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {verify_token}"}
+    )
+    assert response.status_code == 401
 
-    hashed = get_password_hash("hunter2")
-    assert "hunter2" not in hashed
-    assert verify_password("hunter2", hashed) is True
-    assert verify_password("wrong", hashed) is False
+
+def test_update_display_name(client):
+    token = _request_and_extract_token(client, "update@example.com")
+    access_token = client.post("/api/auth/verify-link", json={"token": token}).json()["token"]
+
+    response = client.patch(
+        "/api/auth/me",
+        json={"display_name": "Updated Name"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["display_name"] == "Updated Name"

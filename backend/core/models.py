@@ -22,9 +22,7 @@ class DbUser(Base):
 
     id: Mapped[str] = mapped_column(primary_key=True, index=True)  # UUID string
     email: Mapped[str] = mapped_column(unique=True, index=True)
-    hashed_password: Mapped[str]
     display_name: Mapped[str | None] = mapped_column(default=None)
-    email_verified: Mapped[bool] = mapped_column(default=False)
     saved_payment_method: Mapped[bool] = mapped_column(default=False)
     last_payment_session_id: Mapped[str | None] = mapped_column(default=None)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)

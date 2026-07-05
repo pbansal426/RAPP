@@ -32,6 +32,15 @@ class Settings(BaseSettings):
 
     # Keys / Secrets (Stubbed / optional)
     gemini_api_key: str | None = None
+    # Magic-link auth email delivery (Resend). Unset by default -- see
+    # backend/services/email.py: request_link() falls back to returning the
+    # link directly in the API response (dev-mode), so auth works with zero
+    # setup and zero cost until this is configured. Resend's free tier
+    # (3,000 emails/mo) only lets the unverified onboarding@resend.dev
+    # sender deliver to the account's own registered email; sending to
+    # arbitrary real users requires verifying a custom domain in Resend.
+    resend_api_key: str | None = None
+    email_from: str = "RAPP <onboarding@resend.dev>"
     stripe_secret_key: str | None = None
     stripe_webhook_secret: str | None = None
     stripe_price_single: str = "price_xxx"

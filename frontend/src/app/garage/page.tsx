@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { logOut, useAuthUser } from '@/lib/auth';
 import { listRepairs, type SavedRepair } from '@/lib/repairs';
+import { completeAllPendingSaves } from '@/lib/pendingSave';
 import { AppLogoMarkIcon } from '@/app/sharedIcons';
 
 export default function GaragePage() {
@@ -13,7 +14,12 @@ export default function GaragePage() {
 
   useEffect(() => {
     if (!user) { setRepairs(null); return; }
-    listRepairs().then(setRepairs).catch(() => setRepairs([]));
+    // Clicking a magic link lands here directly (not back on /repair), so
+    // any save deferred while signed out (see lib/pendingSave.ts) completes
+    // here before the list is fetched.
+    completeAllPendingSaves().finally(() => {
+      listRepairs().then(setRepairs).catch(() => setRepairs([]));
+    });
   }, [user]);
 
   useEffect(() => {
