@@ -13,8 +13,8 @@ exercises directly (see CLAUDE.md), so those are top priority.
 | 2015 | Toyota | Highlander | ✅ Done (re-ingested with manifest fix) | 318 | 255 | 52 | 0 | 2122 | 2026-07-05 |
 | 2018 | Honda | Civic | ✅ Done | 231 | 224 | 7 | 0 | 866 | 2026-07-05 |
 | 2018 | Honda | Accord | ✅ Done | 297 | 291 | 6 | 0 | 760 | 2026-07-05 |
-| 2018 | Toyota | Camry | ⏳ In progress | — | — | — | — | — | 2026-07-05 |
-| — | Ford | F-150 | ⬜ Queued | — | — | — | — | — | — |
+| 2018 | Toyota | Camry | ✅ Done | 374 | 367 | 7 | 0 | 2679 | 2026-07-05 |
+| 2018 | Ford | F-150 | ⏳ In progress | — | — | — | — | — | 2026-07-05 |
 | 2025 | Lexus | ES300h | ⬜ Queued (added 2026-07-05, replaces RX350 — user has direct access to this vehicle for testing) | — | — | — | — | — | — |
 
 Queue ends here per user request 2026-07-05 — RX350, Silverado, RAV4, CR-V, and Explorer have been dropped, not deferred. Only F-150 and ES300h remain after Camry finishes.
