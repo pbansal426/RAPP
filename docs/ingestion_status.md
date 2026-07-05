@@ -10,13 +10,17 @@ exercises directly (see CLAUDE.md), so those are top priority.
 | Year | Make | Model | Status | Records Found | PDFs Ingested | PDFs Skipped (no text) | PDFs Failed | Chunks Loaded | Last Updated |
 |------|------|-------|--------|---------------:|---------------:|------------------------:|------------:|---------------:|--------------|
 | 2010 | Toyota | Corolla | ✅ Done | 396 | 299 | 87 | 0 | 2433 | 2026-07-05 |
-| 2015 | Toyota | Highlander | ⏳ Re-ingesting (see note below) | — | — | — | — | — | 2026-07-05 |
-| — | Honda | Civic | ⬜ Queued | — | — | — | — | — | — |
+| 2015 | Toyota | Highlander | ✅ Done (re-ingested with manifest fix) | 318 | 255 | 52 | 0 | 2122 | 2026-07-05 |
+| 2018 | Honda | Civic | ⏳ In progress | — | — | — | — | — | 2026-07-05 |
 | — | Honda | Accord | ⬜ Queued | — | — | — | — | — | — |
 | — | Toyota | Camry | ⬜ Queued | — | — | — | — | — | — |
 | — | Ford | F-150 | ⬜ Queued | — | — | — | — | — | — |
 | — | Lexus | RX350 | ⬜ Queued | — | — | — | — | — | — |
 | — | Chevrolet | Silverado | ⬜ Queued | — | — | — | — | — | — |
+| — | Toyota | RAV4 | ⬜ Queued (added 2026-07-05) | — | — | — | — | — | — |
+| — | Honda | CR-V | ⬜ Queued (added 2026-07-05) | — | — | — | — | — | — |
+| — | Ford | Explorer | ⬜ Queued (added 2026-07-05) | — | — | — | — | — | — |
+| — | Ram | 1500 | ⬜ Queued (added 2026-07-05) | — | — | — | — | — | — |
 
 ## Live progress
 
