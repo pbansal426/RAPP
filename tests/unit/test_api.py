@@ -340,6 +340,8 @@ def test_repair_fallback(mock_retrieve, mock_get, client):
 @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
 @patch("backend.rag.retriever.retrieve")
 def test_repair_gemini_structured_steps(mock_retrieve, mock_get, client, monkeypatch):
+    # Grounded generation only runs when RAG actually returned OEM text --
+    # a zero-hit query skips Gemini entirely (see test_repair_fallback).
     from backend.services.gemini import RepairStep, RepairStepsSchema
 
     monkeypatch.setattr(settings, "gemini_api_key", "test-key")
@@ -347,7 +349,14 @@ def test_repair_gemini_structured_steps(mock_retrieve, mock_get, client, monkeyp
     mock_decode_resp.status_code = 200
     mock_decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
     mock_get.return_value = mock_decode_resp
-    mock_retrieve.return_value = []
+    mock_retrieve.return_value = [
+        {
+            "id": "doc_test_1",
+            "text": "Loosen the spark plug using standard spark plug socket.",
+            "metadata": {"citation": "Honda Civic Service Manual 2018 Section 5"},
+            "distance": 0.1,
+        }
+    ]
 
     mock_response = MagicMock()
     mock_response.parsed = RepairStepsSchema(
@@ -365,7 +374,7 @@ def test_repair_gemini_structured_steps(mock_retrieve, mock_get, client, monkeyp
 
         payload = {
             "vin": "1HGBH41JXMN109186",
-            "symptoms": "Unknown weird noise",
+            "symptoms": "spark plug replacement",
             "stripe_session_id": "cs_test_123",
         }
         response = client.post("/api/repair", json=payload)
@@ -376,6 +385,7 @@ def test_repair_gemini_structured_steps(mock_retrieve, mock_get, client, monkeyp
         "Disconnect the negative battery terminal.",
         "Torque the mounting bolt to 7.5 ft-lbs.",
     ]
+    assert data["citations"] == ["Honda Civic Service Manual 2018 Section 5"]
     assert mock_generate_content.call_args.kwargs["model"] == "gemini-3.5-flash"
     config = mock_generate_content.call_args.kwargs["config"]
     assert config.response_schema is RepairStepsSchema

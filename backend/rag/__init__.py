@@ -1,5 +1,6 @@
 import os
 
+from backend.core.config import settings
 from backend.rag.retriever import retrieve
 from backend.rag.vector_store import ChromaVectorStore, MockVectorStore, VectorStore
 
@@ -18,7 +19,14 @@ def get_vector_store() -> VectorStore:
     global _vector_store_instance
 
     if _vector_store_instance is None:
-        store_type = os.environ.get("VECTOR_STORE", "chroma").lower()
+        # CI/test runs always get the mock store, regardless of VECTOR_STORE --
+        # a real ChromaDB path could still resolve locally and quietly do
+        # nothing useful (or, with Gemini embeddings opted in, dial out).
+        store_type = (
+            "mock"
+            if settings.is_test_mode
+            else os.environ.get("VECTOR_STORE", "chroma").lower()
+        )
         if store_type == "mock":
             _vector_store_instance = MockVectorStore()
         else:
