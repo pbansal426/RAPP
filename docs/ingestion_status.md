@@ -11,9 +11,9 @@ exercises directly (see CLAUDE.md), so those are top priority.
 |------|------|-------|--------|---------------:|---------------:|------------------------:|------------:|---------------:|--------------|
 | 2010 | Toyota | Corolla | ✅ Done | 396 | 299 | 87 | 0 | 2433 | 2026-07-05 |
 | 2015 | Toyota | Highlander | ✅ Done (re-ingested with manifest fix) | 318 | 255 | 52 | 0 | 2122 | 2026-07-05 |
-| 2018 | Honda | Civic | ⏳ In progress | — | — | — | — | — | 2026-07-05 |
-| — | Honda | Accord | ⬜ Queued | — | — | — | — | — | — |
-| — | Toyota | Camry | ⬜ Queued | — | — | — | — | — | — |
+| 2018 | Honda | Civic | ✅ Done | 231 | 224 | 7 | 0 | 866 | 2026-07-05 |
+| 2018 | Honda | Accord | ✅ Done | 297 | 291 | 6 | 0 | 760 | 2026-07-05 |
+| 2018 | Toyota | Camry | ⏳ In progress | — | — | — | — | — | 2026-07-05 |
 | — | Ford | F-150 | ⬜ Queued | — | — | — | — | — | — |
 | — | Lexus | RX350 | ⬜ Queued | — | — | — | — | — | — |
 | — | Chevrolet | Silverado | ⬜ Queued | — | — | — | — | — | — |
