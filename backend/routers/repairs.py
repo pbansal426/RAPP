@@ -24,6 +24,7 @@ def _to_response(repair: DbSavedRepair) -> SavedRepairResponse:
         powertrain=repair.powertrain,
         symptoms=repair.symptoms,
         payment_session_id=repair.payment_session_id,
+        citations=repair.citations,
         saved_at=repair.saved_at.isoformat() if repair.saved_at else None,
     )
 
@@ -48,6 +49,7 @@ def save_repair(
         powertrain=request.powertrain,
         symptoms=request.symptoms.strip(),
         payment_session_id=request.payment_session_id,
+        citations=request.citations,
     )
     db.add(db_repair)
 

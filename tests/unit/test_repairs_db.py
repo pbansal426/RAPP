@@ -66,6 +66,7 @@ def test_save_and_list_repair(client):
             "powertrain": "Gasoline",
             "symptoms": "Squeaking sound when braking",
             "payment_session_id": "cs_test_123",
+            "citations": ["NHTSA TSB T-SB-0235-12 (http://example.com/x.pdf)"],
         },
         headers=headers,
     )
@@ -75,12 +76,14 @@ def test_save_and_list_repair(client):
     assert saved["make"] == "HONDA"
     assert saved["id"]
     assert saved["saved_at"]
+    assert saved["citations"] == ["NHTSA TSB T-SB-0235-12 (http://example.com/x.pdf)"]
 
     list_resp = client.get("/api/repairs", headers=headers)
     assert list_resp.status_code == 200
     repairs = list_resp.json()
     assert len(repairs) == 1
     assert repairs[0]["vin"] == "1HGBH41JXMN109186"
+    assert repairs[0]["citations"] == ["NHTSA TSB T-SB-0235-12 (http://example.com/x.pdf)"]
 
 
 def test_save_repair_minimal_fields(client):

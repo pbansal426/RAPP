@@ -17,7 +17,15 @@ htmlcov/
 .coverage
 coverage.xml
 *.log
+# Trailing-slash form only matches real directories -- data/ is now a
+# symlink to an SSD-hosted location (machine-specific absolute path, must
+# never be committed), so also match the bare name to cover that case.
 data/
+data
+# Pre-migration backups (e.g. data.bak_pre_ssd_migration_YYYY-MM-DD) --
+# never delete these without explicit confirmation; they hold whatever
+# existed before a data/ symlink migration (may include real DB rows).
+data.bak_*
 
 # Environment secrets — never commit these
 .env

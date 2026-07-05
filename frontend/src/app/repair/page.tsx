@@ -394,7 +394,7 @@ export default function RepairPage() {
         </button>
       </div>
 
-      <ChatPanel vin={vin} vinData={vinData} symptoms={symptoms} />
+      <ChatPanel vin={vin} vinData={vinData} symptoms={symptoms} repairSteps={repair?.repair_steps ?? []} />
     </main>
   );
 }

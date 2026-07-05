@@ -6,7 +6,6 @@ import { api, ApiError } from '@/lib/api';
 import PartsPurchasePlan from './PartsPurchasePlan';
 import { signUp } from '@/lib/auth';
 import { saveRepair } from '@/lib/repairs';
-import { isFirebaseConfigured } from '@/lib/firebase';
 import {
   HandToolsIcon,
   SocketSetIcon,
@@ -59,8 +58,6 @@ export default function ResultsPage() {
   const [garageSubmitting, setGarageSubmitting] = useState(false);
   const [garageError, setGarageError] = useState<string | null>(null);
   const [garageSaved, setGarageSaved] = useState(false);
-
-  const firebaseConfigured = isFirebaseConfigured();
 
   const handleGarageSignUp = async () => {
     if (!garageEmail.trim() || !garagePassword.trim()) return;
@@ -397,11 +394,6 @@ export default function ResultsPage() {
               <span>This repair guide and vehicle profile are saved to your garage.</span>
             </div>
             <a href="/garage" className="btn btn-secondary" style={{ width: 'auto', padding: '0 18px', marginTop: 8 }}>Go to My Garage →</a>
-          </div>
-        ) : !firebaseConfigured ? (
-          <div style={{ marginTop: 10 }}>
-            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: 4 }}>Save to My Garage &amp; Keep Guide Forever</h3>
-            <p className="text-muted text-sm">Account creation isn&apos;t configured for this environment yet — check back soon.</p>
           </div>
         ) : (
           <div style={{ marginTop: 10 }}>

@@ -51,6 +51,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Load the extracted documents into the vector store. Required when using --all.",
     )
+    parser.add_argument(
+        "--reset-vehicle",
+        action="store_true",
+        help=(
+            "Clear this vehicle's manifest entries before running, so it is "
+            "re-ingested from scratch (e.g. after wiping data/chroma_db). "
+            "Does not affect other vehicles' manifest entries."
+        ),
+    )
     args = parser.parse_args(argv)
 
     # Progress goes to stderr so the audit log on stdout stays pipeable.
@@ -59,11 +68,22 @@ def main(argv: list[str] | None = None) -> int:
         format="%(levelname)s %(name)s — %(message)s",
         stream=sys.stderr,
     )
+    # -v is for OUR etl.* loggers; third-party internals (pdfminer's
+    # token-level parser trace in particular) are useless noise even in
+    # verbose mode and drown out the actual ingestion progress.
+    logging.getLogger("pdfminer").setLevel(logging.WARNING)
+    logging.getLogger("PIL").setLevel(logging.WARNING)
 
     config = EtlConfig()
     if args.workspace is not None:
         config = dataclasses.replace(config, workspace_dir=args.workspace)
     vehicle = VehicleKey(year=args.year, make=args.make, model=args.model)
+
+    if args.reset_vehicle:
+        manifest_path = config.workspace_dir / "ingest_manifest.json"
+        reset_manifest = IngestManifest(str(manifest_path))
+        removed = reset_manifest.reset_vehicle(vehicle.slug)
+        log.info(f"Reset {removed} manifest entries for {vehicle}")
 
     if args.all:
         log.info(f"Starting full ingest for {vehicle}")

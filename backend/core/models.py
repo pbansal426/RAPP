@@ -9,7 +9,7 @@ rather than as `Column[...]` descriptors.
 
 from datetime import datetime
 
-from sqlalchemy import ForeignKey
+from sqlalchemy import JSON, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -47,6 +47,11 @@ class DbSavedRepair(Base):
     powertrain: Mapped[str | None] = mapped_column(default=None)
     symptoms: Mapped[str]
     payment_session_id: Mapped[str | None] = mapped_column(default=None)
+    # The citations returned by /api/repair at save time -- lets a saved
+    # guide show its provenance later without re-calling /api/repair (which
+    # could return different citations on a re-fetch, e.g. after new TSB
+    # ingestion for this vehicle) or silently losing that context entirely.
+    citations: Mapped[list[str] | None] = mapped_column(JSON, default=None)
     saved_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     user: Mapped["DbUser"] = relationship(back_populates="repairs")

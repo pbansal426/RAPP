@@ -84,6 +84,25 @@ export interface RepairResponse {
   citations: string[];
 }
 
+/** POST /api/repair/chat request. repair_steps is the exact procedure
+ * already shown to the user (not re-derived server-side), so the reply
+ * stays grounded in what's actually on screen. */
+export interface RepairChatRequest {
+  vin: string;
+  vehicle?: VehicleInfo | null;
+  symptoms: string;
+  repair_steps: string[];
+  message: string;
+  stripe_session_id: string;
+}
+
+/** `reply: null` means Gemini is unavailable/failed/quota-exhausted for
+ * this call -- the caller should fall back to a local canned response
+ * rather than surfacing an error. */
+export interface RepairChatResponse {
+  reply: string | null;
+}
+
 /** GET /api/vin/{vin} response — a fully-decoded VehicleInfo, always with
  * year/make/model populated (the endpoint 404s otherwise). */
 export type VinDecodeResponse = VehicleInfo & {

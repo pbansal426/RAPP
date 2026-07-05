@@ -35,9 +35,12 @@ def get_genai_client() -> genai.Client | None:
     """Lazily construct the native Gemini client, or None if no key is
     configured. genai.Client() reads GEMINI_API_KEY from the environment
     itself (backend.core.config loads .env into the process environment on
-    import) -- never pass the key explicitly here."""
+    import) -- never pass the key explicitly here.
+
+    Always returns None in CI/test mode, even if a real GEMINI_API_KEY is
+    present in the environment -- test runs must never dial out."""
     global _genai_client
-    if not settings.gemini_api_key:
+    if settings.is_test_mode or not settings.gemini_api_key:
         return None
     if _genai_client is None:
         _genai_client = genai.Client()
@@ -83,7 +86,10 @@ class RepairStepsSchema(BaseModel):
     steps: list[RepairStep]
 
 
-async def call_gemini_repair_steps(prompt: str) -> list[str] | None:
+async def call_gemini_repair_steps(
+    prompt: str,
+    system_prompt: str = "You are an automotive AI expert mechanic.",
+) -> list[str] | None:
     """Generate repair steps via Gemini structured output. The torque-callout
     contract (frontend regex requires literal "Torque " prefix -- see
     repair/page.tsx) is guaranteed by is_torque_spec in the response schema
@@ -96,7 +102,7 @@ async def call_gemini_repair_steps(prompt: str) -> list[str] | None:
             model=GEMINI_MODEL,
             contents=prompt,
             config=genai_types.GenerateContentConfig(
-                system_instruction="You are an automotive AI expert mechanic.",
+                system_instruction=system_prompt,
                 response_mime_type="application/json",
                 response_schema=RepairStepsSchema,
             ),

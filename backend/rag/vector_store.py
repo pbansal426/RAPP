@@ -4,9 +4,10 @@ import time
 from typing import Any
 
 import structlog
+from google.genai import errors as genai_errors
 from tenacity import (
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
@@ -14,6 +15,19 @@ from tenacity import (
 logger = structlog.get_logger(__name__)
 
 GEMINI_EMBEDDING_MODEL = "text-embedding-004"
+
+# Client errors (bad request/auth/forbidden) won't resolve by retrying --
+# retrying them just burns quota and delays the real error to the caller.
+_NON_RETRYABLE_GEMINI_CODES = (400, 401, 403)
+
+
+def _is_retryable_gemini_error(exc: BaseException) -> bool:
+    if (
+        isinstance(exc, genai_errors.APIError)
+        and exc.code in _NON_RETRYABLE_GEMINI_CODES
+    ):
+        return False
+    return True
 
 
 class VectorStore(abc.ABC):
@@ -72,9 +86,11 @@ class ChromaVectorStore(VectorStore):
                 settings=Settings(anonymized_telemetry=False)
             )
 
-        # Initialize Gemini Client if API key is present
+        # Local ChromaDB embeddings (its built-in all-MiniLM-L6-v2, 384-dim)
+        # are the default -- free and no external dependency. Gemini
+        # embeddings are opt-in only, via USE_GEMINI_EMBEDDINGS=true.
         self.use_gemini_embeddings = (
-            os.environ.get("USE_GEMINI_EMBEDDINGS", "true").lower() == "true"
+            os.environ.get("USE_GEMINI_EMBEDDINGS", "false").lower() == "true"
         )
         self.genai_client: Any = None
         self.genai_types: Any = None
@@ -106,7 +122,7 @@ class ChromaVectorStore(VectorStore):
         )
 
     @retry(
-        retry=retry_if_exception_type(Exception),
+        retry=retry_if_exception(_is_retryable_gemini_error),
         stop=stop_after_attempt(5),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         reraise=True,

@@ -24,7 +24,7 @@ def retrieve(query: str, vin_meta: dict[str, Any], k: int = 5) -> list[dict[str,
     store = get_vector_store()
 
     # Normalize metadata keys for the search filter
-    filter_metadata = {}
+    filter_metadata: dict[str, Any] = {}
     if vin_meta:
         if "make" in vin_meta and vin_meta["make"]:
             if isinstance(vin_meta["make"], list):
@@ -48,7 +48,15 @@ def retrieve(query: str, vin_meta: dict[str, Any], k: int = 5) -> list[dict[str,
                 ]
             else:
                 filter_metadata["drive_type"] = [str(vin_meta["drive_type"]).upper()]
-        if "year" in vin_meta and vin_meta["year"] is not None:
-            filter_metadata["year"] = vin_meta["year"]
+        if "year" in vin_meta and vin_meta["year"] not in (None, ""):
+            # Stored metadata is always an int (see VehicleKey.metadata_tag),
+            # but callers pass whatever type they have (e.g. the vehicle-object
+            # request path stringifies it) -- coerce so the equality filter
+            # in the vector store actually matches instead of silently
+            # returning zero results on a type mismatch.
+            try:
+                filter_metadata["year"] = int(vin_meta["year"])
+            except (TypeError, ValueError):
+                pass
 
     return store.search(query=query, filter_metadata=filter_metadata, k=k)
