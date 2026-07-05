@@ -14,6 +14,11 @@ export interface SavedRepairInput {
   // store card data ourselves — this lets future checkouts prefill/reuse
   // the customer's payment method via the processor.
   paymentSessionId?: string;
+  // The citations returned by /api/repair at the time this guide was
+  // unlocked/saved. Captured at save time rather than re-derived later,
+  // since a re-fetch of /api/repair could return different citations for
+  // the same vehicle/symptoms after new TSB ingestion.
+  citations?: string[];
 }
 
 export interface SavedRepair extends SavedRepairInput {
@@ -31,6 +36,7 @@ interface SavedRepairResponse {
   powertrain: string | null;
   symptoms: string;
   payment_session_id: string | null;
+  citations: string[] | null;
   saved_at: string | null;
 }
 
@@ -45,6 +51,7 @@ function toSavedRepair(r: SavedRepairResponse): SavedRepair {
     powertrain: r.powertrain ?? undefined,
     symptoms: r.symptoms,
     paymentSessionId: r.payment_session_id ?? undefined,
+    citations: r.citations ?? undefined,
     savedAt: r.saved_at ? new Date(r.saved_at).toLocaleDateString() : null,
   };
 }
@@ -61,6 +68,7 @@ export async function saveRepair(repair: SavedRepairInput): Promise<void> {
     powertrain: repair.powertrain ?? null,
     symptoms: repair.symptoms,
     payment_session_id: repair.paymentSessionId ?? null,
+    citations: repair.citations ?? null,
   });
 }
 

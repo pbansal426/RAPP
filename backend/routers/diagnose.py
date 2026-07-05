@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from backend.core.config import settings
 from backend.schemas import DiagnoseRequest, DiagnoseResponse
 from backend.services.gemini import call_gemini_text
+from backend.services.llm import generate_diagnosis_summary
 
 router = APIRouter()
 
@@ -69,10 +70,33 @@ async def diagnose(request: DiagnoseRequest) -> DiagnoseResponse:
 
     summary = f"Free Diagnosis Summary: Misfire or other symptom detected. Symptoms: {request.symptoms}."
 
-    # Attempt Gemini enhancement if key is provided
+    # Grounded in real retrieved OEM text when the vehicle is already known
+    # from the request (no new VIN-decode network call added here -- this is
+    # the free, pre-payment step, and it never depended on VIN decoding
+    # before; only ground when that info is already cheaply available).
+    # Falls back to the previous ungrounded free-text Gemini call, then to
+    # the static default above, exactly as before, when vehicle info isn't
+    # provided. See generate_diagnosis_summary for why this differs from
+    # repair-step generation's stricter "skip Gemini entirely" fallback.
     if settings.gemini_api_key:
-        prompt = f"Diagnose this vehicle symptom: '{request.symptoms}'. OBD codes: {request.obd_codes}. Provide a concise 2-sentence summary of the likely root cause and immediate risks."
-        ai_summary = await call_gemini_text(prompt)
+        if request.vehicle and request.vehicle.make:
+            vin_meta = {
+                "year": str(request.vehicle.year or ""),
+                "make": request.vehicle.make,
+                "model": request.vehicle.model or "",
+                "engine": request.vehicle.engine or "",
+                "drive_type": request.vehicle.drive_type or "",
+            }
+            ai_summary = await generate_diagnosis_summary(
+                vin_meta=vin_meta, symptoms=request.symptoms, obd_codes=obd_list or []
+            )
+        else:
+            prompt = (
+                f"Diagnose this vehicle symptom: '{request.symptoms}'. OBD codes: "
+                f"{request.obd_codes}. Provide a concise 2-sentence summary of the "
+                f"likely root cause and immediate risks."
+            )
+            ai_summary = await call_gemini_text(prompt)
         if ai_summary:
             summary = ai_summary
 

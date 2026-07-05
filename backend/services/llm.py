@@ -14,10 +14,17 @@ from typing import Any
 import structlog
 
 from backend.repair_templates import select_template
-from backend.services.gemini import call_gemini_repair_steps
+from backend.services.gemini import call_gemini_repair_steps, call_gemini_text
 from backend.services.rag import retrieve
 
 logger = structlog.get_logger()
+
+_DIAGNOSIS_GROUNDED_SYSTEM_PROMPT = (
+    "You are an automotive diagnostic assistant. Base your summary ONLY on "
+    "the provided OEM text -- do not invent a root cause or risk that isn't "
+    "supported by it. If the OEM text doesn't clearly address the symptom, "
+    "say so plainly rather than guessing."
+)
 
 _GROUNDED_SYSTEM_PROMPT = (
     "You are a formatting engine. Use ONLY the provided OEM text to generate "
@@ -90,6 +97,43 @@ def _citation_for(doc: dict[str, Any], vin_meta: dict[str, Any]) -> str:
     model_str = meta.get("model", vin_meta.get("model", ""))
     year_str = meta.get("year", vin_meta.get("year", ""))
     return f"{prefix}{make_str} {model_str} Manual ({year_str})".strip()
+
+
+async def generate_diagnosis_summary(
+    vin_meta: dict[str, Any],
+    symptoms: str,
+    obd_codes: list[str],
+) -> str | None:
+    """Generate the free-diagnosis summary, grounded in real retrieved OEM
+    text when available. Unlike repair-step generation, a diagnosis is
+    inherently a best-guess triage step (that's the point of the free tier,
+    before the paid unlock), so -- unlike generate_repair_procedure -- this
+    still falls through to an ungrounded free-text Gemini call rather than
+    refusing outright when nothing is retrieved. Returns None if Gemini is
+    unavailable (caller falls back to the static default summary)."""
+    user_query = f"{symptoms} " + " ".join(obd_codes)
+    results = retrieve(query=user_query.strip(), vin_meta=vin_meta, k=3)
+
+    if results:
+        oem_text = "\n\n".join(f"- {doc['text']}" for doc in results)
+        prompt = (
+            f"Vehicle: {vin_meta.get('year')} {vin_meta.get('make')} {vin_meta.get('model')}.\n"
+            f"Symptoms: {symptoms}. OBD codes: {', '.join(obd_codes) or 'none reported'}.\n\n"
+            f"OEM text:\n{oem_text}\n\n"
+            f"Provide a concise 2-sentence summary of the likely root cause and "
+            f"immediate risks, based on the OEM text above."
+        )
+        return await call_gemini_text(
+            prompt, system_prompt=_DIAGNOSIS_GROUNDED_SYSTEM_PROMPT
+        )
+
+    prompt = (
+        f"Diagnose this vehicle symptom: '{symptoms}'. OBD codes: {obd_codes}. "
+        f"Provide a concise 2-sentence summary of the likely root cause and "
+        f"immediate risks. No vehicle-specific OEM documentation was found for "
+        f"this query, so speak generally rather than asserting vehicle-specific facts."
+    )
+    return await call_gemini_text(prompt)
 
 
 async def generate_repair_procedure(

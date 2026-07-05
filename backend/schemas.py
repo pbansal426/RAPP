@@ -205,6 +205,7 @@ class SavedRepairCreate(BaseModel):
     powertrain: str | None = None
     symptoms: str
     payment_session_id: str | None = None
+    citations: list[str] | None = None
 
 
 class SavedRepairResponse(BaseModel):
@@ -217,4 +218,5 @@ class SavedRepairResponse(BaseModel):
     powertrain: str | None = None
     symptoms: str
     payment_session_id: str | None = None
+    citations: list[str] | None = None
     saved_at: str | None = None

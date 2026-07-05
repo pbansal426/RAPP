@@ -208,6 +208,46 @@ def test_diagnose_gemini_enhancement(client, monkeypatch):
     mock_generate_content.assert_called_once()
     assert mock_generate_content.call_args.kwargs["model"] == "gemini-3.5-flash"
 
+@patch("backend.rag.retriever.retrieve")
+def test_diagnose_gemini_enhancement_grounded_with_vehicle(mock_retrieve, client, monkeypatch):
+    """When the request includes vehicle info and RAG finds real OEM text,
+    the diagnosis summary must be generated from that grounded prompt (not
+    the plain ungrounded one) -- see generate_diagnosis_summary."""
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+    mock_retrieve.return_value = [
+        {
+            "id": "doc_1",
+            "text": "Brake pad wear sensor contact indicates pad replacement is due.",
+            "metadata": {"bulletin_number": "T-SB-9999-20", "source_url": "http://example.com/x.pdf"},
+            "distance": 0.05,
+        }
+    ]
+
+    mock_response = MagicMock()
+    mock_response.text = "Grounded summary from real TSB text."
+    mock_generate_content = AsyncMock(return_value=mock_response)
+
+    with patch("backend.services.gemini.get_genai_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = mock_generate_content
+        mock_get_client.return_value = mock_client
+
+        payload = {
+            "vin": "1HGBH41JXMN109186",
+            "symptoms": "Squeaking sound when braking",
+            "obd_codes": "P0101",
+            "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
+        }
+        response = client.post("/api/diagnose", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["summary"] == "Grounded summary from real TSB text."
+    mock_generate_content.assert_called_once()
+    config = mock_generate_content.call_args.kwargs["config"]
+    assert "ONLY on" in config.system_instruction
+    assert "Brake pad wear sensor" in mock_generate_content.call_args.kwargs["contents"]
+
+
 def test_diagnose_gemini_failure_falls_back_to_default_summary(client, monkeypatch):
     monkeypatch.setattr(settings, "gemini_api_key", "test-key")
 
