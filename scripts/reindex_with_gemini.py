@@ -18,9 +18,9 @@ load_dotenv()
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import structlog
+import structlog  # noqa: E402
 
-from backend.rag import get_vector_store
+from backend.rag import get_vector_store  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = structlog.get_logger()
@@ -41,7 +41,7 @@ def reindex_with_gemini() -> bool:
 
     # Get current collection info
     try:
-        count = getattr(store, "collection").count()
+        count = getattr(store, "collection").count()  # noqa: B009
         logger.info(f"Current document count: {count}")
     except Exception as e:
         logger.error(f"Failed to get collection count: {e}")
@@ -54,7 +54,8 @@ def reindex_with_gemini() -> bool:
     # Get all existing documents
     try:
         # In ChromaDB 0.5.x, 'ids' is always returned and invalid in `include` list
-        results = getattr(store, "collection").get(include=["documents", "metadatas"])
+        results = getattr(store, "collection").get(  # noqa: B009
+        include=["documents", "metadatas"])
         logger.info(f"Retrieved {len(results['ids'])} documents")
     except Exception as e:
         logger.error(f"Failed to retrieve documents: {e}")

@@ -353,7 +353,7 @@ class MockVectorStore(VectorStore):
 
         # 2. Score text matching by word overlap
         def clean_word(w: str) -> str:
-            return w.strip(".,!?;;:")
+            return w.strip(".,!?;:")
 
         query_words = {clean_word(w) for w in query.lower().split() if clean_word(w)}
         scored_docs = []

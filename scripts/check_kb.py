@@ -3,14 +3,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from backend.rag import get_vector_store
+from backend.rag import get_vector_store  # noqa: E402
 
 
 def main() -> None:
     store = get_vector_store()
 
     try:
-        count = getattr(store, "collection").count()
+        count = getattr(store, "collection").count()  # noqa: B009
         print(f"Vector Store Document Count: {count}")
     except Exception as e:
         print(f"Could not count documents: {e}")
