@@ -4,7 +4,27 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from backend.core.config import settings
+
 logger = structlog.get_logger()
+
+_ALLOWED_ORIGINS = [
+    origin.strip() for origin in settings.allowed_origins.split(",") if origin.strip()
+]
+
+
+def _attach_cors_headers(request: Request, response: JSONResponse) -> None:
+    """Exception handlers registered for the bare Exception class run inside
+    Starlette's ServerErrorMiddleware, which wraps *outside* CORSMiddleware --
+    so a response from general_exception_handler never gets CORS headers
+    from the middleware stack and the browser reports it as a network
+    failure (TypeError: Failed to fetch) instead of surfacing the real 500.
+    Attach them here directly as a workaround for that ordering."""
+    origin = request.headers.get("origin")
+    if origin and (origin in _ALLOWED_ORIGINS or "*" in _ALLOWED_ORIGINS):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
 
 
 async def http_exception_handler(
@@ -42,10 +62,12 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
         method=request.method,
         error=str(exc),
     )
-    return JSONResponse(
+    response = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"error": "Internal server error"},
     )
+    _attach_cors_headers(request, response)
+    return response
 
 
 def register_exception_handlers(app: FastAPI) -> None:
