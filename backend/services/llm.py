@@ -40,30 +40,56 @@ _GENERIC_FALLBACK_STEPS = [
     "Torque the mounting bolt to exactly 7.5 ft-lbs using a torque wrench. Do not overtighten.",
     "Reconnect the electrical harness plug ensuring the click sound is heard, reinstall the engine cover, and reconnect the negative battery terminal.",
 ]
-_GENERIC_FALLBACK_CITATIONS = [
-    "Honda Civic ESM 2016-2021 Section 12-4",
-    "Lexus ESM 2016-2022 Section 14-8",
-    "Toyota Master Workshop Manual Pub. No. T3-094",
-]
+
+
+def _no_source_citation(vin_meta: dict[str, Any]) -> str:
+    """Honest citation for the template/generic fallback path -- never name
+    a specific OEM manual here, since no vehicle-specific document was
+    actually retrieved (naming one that doesn't match the queried vehicle,
+    e.g. citing a Honda manual for a Toyota query, is a real accuracy/
+    liability problem, not just cosmetic)."""
+    make = vin_meta.get("make") or ""
+    model = vin_meta.get("model") or ""
+    vehicle_str = f"{make} {model}".strip() or "this vehicle"
+    return (
+        f"RAPP curated procedure -- no vehicle-specific NHTSA TSB or OEM "
+        f"documentation was found for {vehicle_str}. This is a general "
+        f"reference procedure; verify torque specs and part fitment against "
+        f"your vehicle's official service documentation before performing "
+        f"this repair."
+    )
 
 
 def _citation_for(doc: dict[str, Any], vin_meta: dict[str, Any]) -> str:
     meta = doc.get("metadata") or {}
+
+    # Every source ingested today is source_authority="official" (NHTSA TSBs
+    # -- see etl/load/vector_loader.py), so this is a no-op currently. It's
+    # here so that whenever a non-official source type (community/forum/UGC)
+    # gets added, its citations are visibly flagged rather than presented
+    # with the same implied authority as an official government/OEM source.
+    source_authority = meta.get("source_authority")
+    prefix = (
+        ""
+        if source_authority in (None, "official")
+        else "[Unverified/community-sourced] "
+    )
+
     bulletin = meta.get("bulletin_number")
     source_url = meta.get("source_url")
     if bulletin:
         return (
-            f"NHTSA TSB {bulletin} ({source_url})"
+            f"{prefix}NHTSA TSB {bulletin} ({source_url})"
             if source_url
-            else f"NHTSA TSB {bulletin}"
+            else f"{prefix}NHTSA TSB {bulletin}"
         )
     citation = meta.get("citation") or meta.get("source")
     if citation:
-        return str(citation)
+        return f"{prefix}{citation}"
     make_str = meta.get("make", vin_meta.get("make", ""))
     model_str = meta.get("model", vin_meta.get("model", ""))
     year_str = meta.get("year", vin_meta.get("year", ""))
-    return f"{make_str} {model_str} Manual ({year_str})".strip()
+    return f"{prefix}{make_str} {model_str} Manual ({year_str})".strip()
 
 
 async def generate_repair_procedure(
@@ -84,10 +110,11 @@ async def generate_repair_procedure(
     results = retrieve(query=user_query, vin_meta=vin_meta, k=5)
 
     if not results:
+        citation = _no_source_citation(vin_meta)
         template = select_template(symptoms, obd_codes)
         if template:
-            return list(template.steps), list(template.citations)
-        return list(_GENERIC_FALLBACK_STEPS), list(_GENERIC_FALLBACK_CITATIONS)
+            return list(template.steps), [citation]
+        return list(_GENERIC_FALLBACK_STEPS), [citation]
 
     repair_steps = [doc["text"] for doc in results]
     citations = [_citation_for(doc, vin_meta) for doc in results]

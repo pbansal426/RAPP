@@ -38,6 +38,11 @@ class VehicleKey:
     def __str__(self) -> str:
         return f"{self.year} {self.make} {self.model}"
 
+    @property
+    def slug(self) -> str:
+        """Filesystem/manifest-safe identifier, e.g. "2010_toyota_corolla"."""
+        return f"{self.year}_{self.make}_{self.model}".lower().replace(" ", "_")
+
 
 @dataclass(frozen=True)
 class TsbRecord:

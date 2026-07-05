@@ -14,6 +14,13 @@ from dataclasses import dataclass, field
 
 _CODE_TOKEN_RE = re.compile(r"\b([PBCU]\d{4})\b", re.IGNORECASE)
 
+_GENERIC_CITATION = (
+    "RAPP curated repair procedure -- general reference, not sourced from "
+    "a vehicle-specific OEM manual. Verify torque specs and part fitment "
+    "against your vehicle's official service documentation before performing "
+    "this repair."
+)
+
 
 @dataclass(frozen=True)
 class RepairTemplate:
@@ -46,10 +53,7 @@ IGNITION_MISFIRE = RepairTemplate(
         "Clear the stored misfire code with an OBD-II scanner and start the engine, listening for smooth idle with no rough running.",
         "Take the vehicle on a mixed-speed test drive of 10-15 minutes and confirm the check engine light does not return.",
     ],
-    citations=[
-        "Honda Civic ESM 2016-2021 Section 12-4",
-        "Toyota Master Workshop Manual Pub. No. T3-094",
-    ],
+    citations=[_GENERIC_CITATION],
     parts=[
         "Ignition coil pack ($45-$90 each)",
         "Spark plug set ($8-$20 per plug)",
@@ -77,10 +81,7 @@ OXYGEN_SENSOR = RepairTemplate(
         "Clear the stored oxygen sensor code with an OBD-II scanner.",
         "Start the engine and allow it to idle for 2-3 minutes, then take a 10-15 minute mixed-speed test drive to complete a full sensor monitor cycle and confirm the code does not return.",
     ],
-    citations=[
-        "Toyota Master Workshop Manual Pub. No. T3-094",
-        "Lexus ESM 2016-2022 Section 14-8",
-    ],
+    citations=[_GENERIC_CITATION],
     parts=[
         "Oxygen sensor ($40-$120)",
         "Anti-seize compound ($6)",
@@ -108,10 +109,7 @@ FUEL_TRIM_LEAN = RepairTemplate(
         "Clear the stored lean-condition code with an OBD-II scanner.",
         "Start the engine and let it idle for 5 minutes, listening for any hissing that indicates a remaining leak, then test-drive to confirm fuel trims stabilize and the code does not return.",
     ],
-    citations=[
-        "Honda Civic ESM 2016-2021 Section 12-4",
-        "Ford F-150 Workshop Manual Section 9-2",
-    ],
+    citations=[_GENERIC_CITATION],
     parts=[
         "Vacuum hose, per foot ($3-$8)",
         "Intake manifold gasket ($15-$45)",
@@ -140,10 +138,7 @@ CATALYTIC_CONVERTER = RepairTemplate(
         "Reconnect the negative battery terminal and lower the vehicle.",
         "Clear the catalyst efficiency code with an OBD-II scanner and take a mixed highway/city test drive of at least 15 minutes to complete the catalyst monitor and confirm the code does not return.",
     ],
-    citations=[
-        "Toyota Master Workshop Manual Pub. No. T3-094",
-        "GM Service Information Section 6E-1",
-    ],
+    citations=[_GENERIC_CITATION],
     parts=[
         "Catalytic converter, direct-fit ($150-$400)",
         "Flange gaskets, pair ($10)",
@@ -170,10 +165,7 @@ EVAP_LEAK = RepairTemplate(
         "Refuel to at least half a tank if below that level, as the EVAP monitor requires a minimum fuel level to run.",
         "Complete several drive cycles including a cold start, and confirm the EVAP monitor completes with no code return — this can take 1-3 drive cycles to fully verify.",
     ],
-    citations=[
-        "Ford F-150 Workshop Manual Section 9-2",
-        "Honda Civic ESM 2016-2021 Section 12-4",
-    ],
+    citations=[_GENERIC_CITATION],
     parts=[
         "EVAP purge valve ($25-$60)",
         "EVAP vent valve ($20-$70)",
@@ -202,10 +194,7 @@ BRAKES = RepairTemplate(
         "Pump the brake pedal several times before driving to seat the new pads against the rotor and restore normal pedal feel.",
         "Perform a brake pad break-in by making 8-10 moderate stops from about 35 mph with cool-down time between each, avoiding hard braking for the first 100 miles.",
     ],
-    citations=[
-        "Honda Civic ESM 2016-2021 Section 12-4",
-        "Chevrolet Silverado Service Manual Section 5-3",
-    ],
+    citations=[_GENERIC_CITATION],
     parts=[
         "Brake pad set ($30-$90)",
         "Brake rotors, pair ($60-$150)",
@@ -234,10 +223,7 @@ SUSPENSION = RepairTemplate(
         "Repeat for the opposite side if replacing as a pair, which is strongly recommended for even handling.",
         "Have the vehicle's wheel alignment checked within the next few days, as strut replacement can shift alignment settings.",
     ],
-    citations=[
-        "Chevrolet Silverado Service Manual Section 5-3",
-        "Toyota Master Workshop Manual Pub. No. T3-094",
-    ],
+    citations=[_GENERIC_CITATION],
     parts=[
         "Strut assembly, each ($80-$220)",
         "Sway bar end link ($15-$35)",
@@ -265,10 +251,7 @@ CHARGING_BATTERY = RepairTemplate(
         "Start the engine and confirm charging voltage now reads 13.5-14.7V at idle.",
         "Clear any stored charging-system codes and drive the vehicle to confirm no warning light returns.",
     ],
-    citations=[
-        "GM Service Information Section 6E-1",
-        "Ford F-150 Workshop Manual Section 9-2",
-    ],
+    citations=[_GENERIC_CITATION],
     parts=[
         "Battery, group size varies ($90-$220)",
         "Alternator ($120-$350)",
@@ -296,10 +279,7 @@ COOLING_SYSTEM = RepairTemplate(
         "Top off the coolant level once air is purged and the level stabilizes, then reinstall the cap.",
         "Reconnect the negative battery terminal and monitor the temperature gauge on a test drive to confirm normal operating temperature is reached and maintained.",
     ],
-    citations=[
-        "Toyota Master Workshop Manual Pub. No. T3-094",
-        "Honda Civic ESM 2016-2021 Section 12-4",
-    ],
+    citations=[_GENERIC_CITATION],
     parts=[
         "Thermostat ($12-$35)",
         "Coolant, per gallon ($15-$25)",
@@ -326,10 +306,7 @@ OIL_SERVICE = RepairTemplate(
         "Shut off the engine, wait 2 minutes for the oil to settle, and recheck the dipstick level, topping off if needed.",
         "Reset the oil life monitor if the vehicle has one, following the manufacturer's dashboard reset procedure.",
     ],
-    citations=[
-        "GM Service Information Section 6E-1",
-        "Ford F-150 Workshop Manual Section 9-2",
-    ],
+    citations=[_GENERIC_CITATION],
     parts=[
         "Engine oil, per manufacturer spec ($25-$60)",
         "Oil filter ($8-$20)",
@@ -356,10 +333,7 @@ EXHAUST = RepairTemplate(
         "Lower the vehicle and start the engine, listening closely for exhaust leaks (a hissing or popping sound) at each joint.",
         "Take a short test drive over varied road surfaces and re-check underneath for any contact points or unusual vibration.",
     ],
-    citations=[
-        "Chevrolet Silverado Service Manual Section 5-3",
-        "Toyota Master Workshop Manual Pub. No. T3-094",
-    ],
+    citations=[_GENERIC_CITATION],
     parts=[
         "Cat-back exhaust section ($150-$500)",
         "Exhaust flange gasket ($8)",
@@ -387,10 +361,7 @@ WHEEL_SPEED_ABS = RepairTemplate(
         "Reconnect the negative battery terminal, reinstall the wheel, and Torque the lug nuts to 80-100 ft-lbs (108-135 Nm) in a star pattern after lowering the vehicle.",
         "Clear the stored wheel speed sensor code with an OBD-II scanner and take a test drive up to 20 mph, confirming the ABS and traction control warning lights stay off.",
     ],
-    citations=[
-        "GM Service Information Section 6E-1",
-        "Honda Civic ESM 2016-2021 Section 12-4",
-    ],
+    citations=[_GENERIC_CITATION],
     parts=["ABS wheel speed sensor ($35-$90)", "Anti-seize compound ($6)"],
 )
 

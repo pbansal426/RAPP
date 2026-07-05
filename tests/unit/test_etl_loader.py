@@ -10,17 +10,48 @@ def test_manifest():
         manifest_path = os.path.join(tmpdir, "manifest.json")
         manifest = IngestManifest(manifest_path)
 
-        assert manifest.get_status("123", "doc.pdf") is None
-        assert not manifest.is_ingested("123", "doc.pdf")
+        assert manifest.get_status("2010_toyota_corolla", "123", "doc.pdf") is None
+        assert not manifest.is_ingested("2010_toyota_corolla", "123", "doc.pdf")
 
-        manifest.mark_status("123", "doc.pdf", "ingested", chunks_count=5)
+        manifest.mark_status("2010_toyota_corolla", "123", "doc.pdf", "ingested", chunks_count=5)
 
-        assert manifest.get_status("123", "doc.pdf") == "ingested"
-        assert manifest.is_ingested("123", "doc.pdf")
+        assert manifest.get_status("2010_toyota_corolla", "123", "doc.pdf") == "ingested"
+        assert manifest.is_ingested("2010_toyota_corolla", "123", "doc.pdf")
 
         # Test reload
         manifest2 = IngestManifest(manifest_path)
-        assert manifest2.get_status("123", "doc.pdf") == "ingested"
+        assert manifest2.get_status("2010_toyota_corolla", "123", "doc.pdf") == "ingested"
+
+
+def test_manifest_is_scoped_per_vehicle():
+    """The same NHTSA id/file_name shared by two vehicles must be tracked
+    independently -- ingesting it for one vehicle must not cause the other
+    vehicle's run to silently skip tagging it with its own metadata."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        manifest_path = os.path.join(tmpdir, "manifest.json")
+        manifest = IngestManifest(manifest_path)
+
+        manifest.mark_status("2010_toyota_corolla", "999", "shared.pdf", "ingested", chunks_count=3)
+
+        assert manifest.is_ingested("2010_toyota_corolla", "999", "shared.pdf")
+        assert not manifest.is_ingested("2015_toyota_highlander", "999", "shared.pdf")
+
+
+def test_manifest_reset_vehicle():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        manifest_path = os.path.join(tmpdir, "manifest.json")
+        manifest = IngestManifest(manifest_path)
+
+        manifest.mark_status("2010_toyota_corolla", "111", "a.pdf", "ingested", chunks_count=1)
+        manifest.mark_status("2010_toyota_corolla", "222", "b.pdf", "ingested", chunks_count=1)
+        manifest.mark_status("2015_toyota_highlander", "111", "a.pdf", "ingested", chunks_count=1)
+
+        removed = manifest.reset_vehicle("2010_toyota_corolla")
+
+        assert removed == 2
+        assert not manifest.is_ingested("2010_toyota_corolla", "111", "a.pdf")
+        assert not manifest.is_ingested("2010_toyota_corolla", "222", "b.pdf")
+        assert manifest.is_ingested("2015_toyota_highlander", "111", "a.pdf")
 
 
 def test_chunks_to_documents():

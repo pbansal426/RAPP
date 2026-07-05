@@ -335,7 +335,12 @@ def test_repair_fallback(mock_retrieve, mock_get, client):
     assert response.status_code == 200
     data = response.json()
     assert "Disconnect negative battery terminal." in data["repair_steps"]
-    assert "Honda Civic ESM 2016-2021 Section 12-4" in data["citations"]
+    # No vehicle-specific source was found, so the citation must not name a
+    # real (and, worse, mismatched) OEM manual -- see backend/services/llm.py
+    # generate_repair_procedure's zero-hit fallback.
+    assert len(data["citations"]) == 1
+    assert "no vehicle-specific" in data["citations"][0].lower()
+    assert "ESM" not in data["citations"][0]
 
 @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
 @patch("backend.rag.retriever.retrieve")
