@@ -10,7 +10,15 @@ from backend.core.database import engine
 from backend.core.exceptions import register_exception_handlers
 from backend.core.logging import configure_logging
 from backend.core.models import Base
-from backend.routers import auth, diagnose, payments, repair, repairs, vin
+from backend.routers import (
+    auth,
+    diagnose,
+    payments,
+    repair,
+    repairs,
+    vehicle_safety,
+    vin,
+)
 
 configure_logging(settings)
 logger = structlog.get_logger()
@@ -51,6 +59,7 @@ app.include_router(repair.router)
 app.include_router(payments.router)
 app.include_router(auth.router)
 app.include_router(repairs.router)
+app.include_router(vehicle_safety.router)
 
 
 @app.get("/health")

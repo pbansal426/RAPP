@@ -30,7 +30,13 @@ import {
   ChecklistIcon,
   QualityCheckIcon,
 } from '@/app/sharedIcons';
-import type { DiagnosisResponse, VehicleInfo } from '@/lib/types';
+import { getComplaintsSummary, getOpenRecalls } from '@/lib/vehicleSafety';
+import type {
+  ComplaintsSummaryResponse,
+  DiagnosisResponse,
+  RecallsResponse,
+  VehicleInfo,
+} from '@/lib/types';
 
 interface CheckoutResponse {
   checkout_url: string;
@@ -45,6 +51,8 @@ export default function ResultsPage() {
   const [diagnosis, setDiagnosis] = useState<DiagnosisResponse | null>(null);
   const [vinData, setVinData] = useState<VehicleInfo | null>(null);
   const [safetyWarning, setSafetyWarning] = useState<string | null>(null);
+  const [recalls, setRecalls] = useState<RecallsResponse | null>(null);
+  const [complaintsSummary, setComplaintsSummary] = useState<ComplaintsSummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [payLoading, setPayLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +116,22 @@ export default function ResultsPage() {
     const storedVinData = localStorage.getItem('rapp_vin_data');
     const parsedVehicle: VehicleInfo | null = storedVinData ? JSON.parse(storedVinData) : null;
     if (parsedVehicle) setVinData(parsedVehicle);
+
+    // Recalls/complaints are independent of symptoms (they exist whether or
+    // not this visit's symptom matches one) and free to look up -- fire
+    // them as soon as year/make/model are known, don't gate on the
+    // diagnose call below. Both endpoints degrade to an empty result
+    // server-side on failure, so a rejected promise here would only mean a
+    // genuine frontend/network issue -- still just silently skip, since
+    // this is supplementary trust-building content, not core to the page.
+    if (parsedVehicle?.year && parsedVehicle.make && parsedVehicle.model) {
+      getOpenRecalls(parsedVehicle.year, parsedVehicle.make, parsedVehicle.model)
+        .then(setRecalls)
+        .catch(() => {});
+      getComplaintsSummary(parsedVehicle.year, parsedVehicle.make, parsedVehicle.model)
+        .then(setComplaintsSummary)
+        .catch(() => {});
+    }
 
     const obdCodes = JSON.parse(localStorage.getItem('rapp_obd_codes') ?? '[]') as string[];
 
@@ -207,6 +231,57 @@ export default function ResultsPage() {
         >
           <span className="safety-banner-icon" aria-hidden="true"><AlertTriangleIcon size={20} /></span>
           <span>{safetyWarning}</span>
+        </div>
+      )}
+
+      {/* ── NHTSA open recalls: live lookup, never a stale ingested snapshot ── */}
+      {recalls && recalls.count > 0 && (
+        <div
+          data-testid="open-recalls-banner"
+          className="card"
+          style={{ border: '1px solid var(--accent-red)' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <AlertTriangleIcon size={20} />
+            <p className="card-label" style={{ margin: 0, color: 'var(--accent-red)' }}>
+              {recalls.count} Open Recall{recalls.count > 1 ? 's' : ''} — Free Dealer Repair Available
+            </p>
+          </div>
+          <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
+            NHTSA lists {recalls.count} open safety recall{recalls.count > 1 ? 's' : ''} for this vehicle. Manufacturer recalls are repaired free of charge at any dealership.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {recalls.open_recalls.map((r) => (
+              <div key={r.campaign_number} style={{ borderTop: '1px solid var(--border-color, rgba(255,255,255,0.1))', paddingTop: 10 }}>
+                <p style={{ fontWeight: 700, marginBottom: 4 }}>{r.component || 'Recall'} — Campaign #{r.campaign_number}</p>
+                <p className="text-muted text-sm" style={{ marginBottom: 4 }}>{r.summary}</p>
+                <p className="text-muted text-sm">{r.remedy}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {recalls && recalls.count === 0 && (
+        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <CheckCircleIcon size={16} style={{ color: '#4ade80' }} />
+          <span className="text-muted text-sm">No open NHTSA recalls found for this vehicle as of today.</span>
+        </div>
+      )}
+
+      {/* ── NHTSA complaints: unverified consumer reports, statistical signal only ── */}
+      {complaintsSummary && complaintsSummary.total_complaints > 0 && (
+        <div className="card">
+          <p className="card-label" style={{ marginBottom: 4 }}>Common Reported Issues</p>
+          <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
+            Based on {complaintsSummary.total_complaints} unverified NHTSA consumer complaints for this vehicle — not confirmed defects, just what owners report most.
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {complaintsSummary.top_components.map((c) => (
+              <span key={c.component} className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {c.component} ({c.count})
+              </span>
+            ))}
+          </div>
         </div>
       )}
 

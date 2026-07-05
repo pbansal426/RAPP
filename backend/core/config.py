@@ -27,6 +27,9 @@ class Settings(BaseSettings):
 
     # API endpoints and URLs
     nhtsa_base_url: str = "https://vpic.nhtsa.dot.gov/api/vehicles"
+    # Separate host from nhtsa_base_url -- vpic.nhtsa.dot.gov (VIN decode)
+    # and api.nhtsa.gov (recalls/complaints) are different NHTSA services.
+    nhtsa_safety_api_base: str = "https://api.nhtsa.gov"
     frontend_url: str = "http://localhost:3000"
     backend_url: str = "http://localhost:8000"
 
