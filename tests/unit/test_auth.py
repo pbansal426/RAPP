@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 from backend.core.database import get_db
 from backend.core.models import Base
 from backend.main import app
+from backend.routers import auth as auth_router
 
 
 @pytest.fixture
@@ -27,6 +28,10 @@ def client():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    # The per-email request-link cooldown is process-global state (see
+    # backend/routers/auth.py) and would otherwise leak between tests that
+    # reuse the same address.
+    auth_router._last_request_at.clear()
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.pop(get_db, None)
@@ -71,10 +76,48 @@ def test_verify_link_same_email_reuses_existing_account(client):
     token1 = _request_and_extract_token(client, "same@example.com")
     user1 = client.post("/api/auth/verify-link", json={"token": token1}).json()["user"]
 
+    # Bypass the per-email cooldown -- this test wants two *separate*
+    # request-link calls for the same address, not to exercise the
+    # rate-limit itself (see test_request_link_is_rate_limited_per_email).
+    auth_router._last_request_at.clear()
     token2 = _request_and_extract_token(client, "Same@Example.com")
     user2 = client.post("/api/auth/verify-link", json={"token": token2}).json()["user"]
 
     assert user1["id"] == user2["id"]
+
+
+def test_request_link_is_rate_limited_per_email(client):
+    first = client.post("/api/auth/request-link", json={"email": "cooldown@example.com"})
+    assert first.status_code == 200
+
+    second = client.post("/api/auth/request-link", json={"email": "cooldown@example.com"})
+    assert second.status_code == 429
+
+
+def test_request_link_does_not_leak_link_when_send_fails(client, monkeypatch):
+    # If a real email provider is configured but the send itself fails
+    # (e.g. Resend's sandbox mode rejecting delivery to a non-owner
+    # address), the response must NOT fall back to exposing the magic
+    # link -- that would let anyone sign in as any email they can name.
+    monkeypatch.setattr(auth_router.settings, "resend_api_key", "fake-key-for-test")
+
+    async def _always_fails(to_email, magic_link):
+        return False
+
+    monkeypatch.setattr(auth_router, "send_magic_link_email", _always_fails)
+
+    response = client.post("/api/auth/request-link", json={"email": "victim@example.com"})
+    assert response.status_code == 200
+    assert response.json()["magic_link"] is None
+
+
+def test_verify_link_rejects_a_reused_token(client):
+    token = _request_and_extract_token(client, "reuse@example.com")
+    first = client.post("/api/auth/verify-link", json={"token": token})
+    assert first.status_code == 200
+
+    second = client.post("/api/auth/verify-link", json={"token": token})
+    assert second.status_code == 401
 
 
 def test_verify_link_invalid_token_returns_401(client):

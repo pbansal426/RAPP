@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -25,9 +26,16 @@ def create_access_token(data: dict[str, Any]) -> str:
 
 
 def create_verify_token(user_id: str) -> str:
-    """A short-lived, single-purpose token embedded in a magic sign-in link."""
+    """A short-lived, single-use token embedded in a magic sign-in link.
+
+    Carries a `jti` so verify_link() can reject a second use of the same
+    link -- without it, a forwarded/screenshotted/browser-history magic
+    link would grant a fresh 7-day session every time it's replayed within
+    its 15-minute window, not just once.
+    """
     return _create_token(
-        {"sub": user_id, "type": "verify"}, VERIFY_TOKEN_EXPIRE_MINUTES
+        {"sub": user_id, "type": "verify", "jti": str(uuid.uuid4())},
+        VERIFY_TOKEN_EXPIRE_MINUTES,
     )
 
 
