@@ -14,8 +14,10 @@ exercises directly (see CLAUDE.md), so those are top priority.
 | 2018 | Honda | Civic | ✅ Done | 231 | 224 | 7 | 0 | 866 | 2026-07-05 |
 | 2018 | Honda | Accord | ✅ Done | 297 | 291 | 6 | 0 | 760 | 2026-07-05 |
 | 2018 | Toyota | Camry | ✅ Done | 374 | 367 | 7 | 0 | 2679 | 2026-07-05 |
-| 2018 | Ford | F-150 | ⏳ In progress | — | — | — | — | — | 2026-07-05 |
-| 2025 | Lexus | ES300h | ⬜ Queued (added 2026-07-05, replaces RX350 — user has direct access to this vehicle for testing) | — | — | — | — | — | — |
+| 2018 | Ford | F-150 | ✅ Done | 389 | 389 | 0 | 0 | 1702 | 2026-07-05 |
+| 2025 | Lexus | ES (300h) | ✅ Done — NHTSA models this as just "ES", "300h" is a trim not a model name | 32 | 32 | 0 | 0 | 216 | 2026-07-05 |
+
+**Queue complete.** All planned vehicles for this manual/local phase are done: Corolla, Highlander, Civic, Accord, Camry, F-150, ES. Next phase is Google Jules (see docs/jules_ingestion_runbook.md once written).
 
 Queue ends here per user request 2026-07-05 — RX350, Silverado, RAV4, CR-V, and Explorer have been dropped, not deferred. Only F-150 and ES300h remain after Camry finishes.
 
