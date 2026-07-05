@@ -202,6 +202,36 @@ BRAKES = RepairTemplate(
     ],
 )
 
+BRAKES_DRUM = RepairTemplate(
+    category="brakes_drum",
+    title="Rear Drum Brake Shoe Replacement",
+    steps=[
+        "Park on level ground, set the parking brake, and place wheel chocks under the front wheels before working on the rear.",
+        "Loosen the rear lug nuts by a quarter turn while the wheel is still on the ground, using a 19mm or 21mm socket (confirm size for your vehicle).",
+        "Raise the vehicle at the manufacturer's rear jack point and support it on a jack stand before removing the wheel.",
+        "Remove the lug nuts fully, take off the wheel, and pull the brake drum straight off the hub — if seized, tap the drum evenly around its edge with a rubber mallet, or back off the self-adjuster through the access hole with a brake spoon.",
+        "Photograph the spring and hardware layout before disassembly — drum brake hardware orientation matters and is easy to get backward on reassembly.",
+        "Using a brake spring pliers or shoe hold-down spring tool, remove the hold-down springs, pins, and cups securing each shoe to the backing plate.",
+        "Disconnect the parking brake cable from the lever on the rear (secondary) shoe using needle-nose pliers.",
+        "Remove the shoe return springs and the adjuster assembly, then lift both shoes away from the backing plate as a set.",
+        "Clean the backing plate with brake cleaner and inspect the wheel cylinder for any sign of brake fluid leaking past its boots — a leaking wheel cylinder must be replaced before proceeding.",
+        "Apply a thin layer of high-temperature brake grease to the six raised contact pads on the backing plate where the shoes ride.",
+        "Transfer the parking brake lever to the new secondary shoe, then install the new shoes onto the backing plate in the same orientation as the originals, securing them with the hold-down springs, pins, and cups.",
+        "Reconnect the shoe return springs and the adjuster assembly, and reconnect the parking brake cable to the lever.",
+        "Turn the adjuster to expand the shoes until the drum can just be installed with slight resistance, matching the original drum's inner diameter.",
+        "Reinstall the drum, wheel, and lug nuts; lower the vehicle and Torque the lug nuts to 80-100 ft-lbs (108-135 Nm) in a star pattern.",
+        "Pump the brake pedal firmly several times and apply the parking brake a few times to let the self-adjuster set shoe clearance.",
+        "Test drive at low speed first, confirming firm pedal feel and no dragging or pulling, before returning to normal driving.",
+    ],
+    citations=[_GENERIC_CITATION],
+    parts=[
+        "Brake shoe set ($25-$70)",
+        "Brake drum, each ($35-$90)",
+        "Brake hardware kit (springs/pins/adjuster) ($10-$25)",
+        "High-temperature brake grease ($6)",
+    ],
+)
+
 SUSPENSION = RepairTemplate(
     category="suspension",
     title="Strut & Shock Absorber Replacement",
@@ -374,6 +404,7 @@ _TEMPLATES: dict[str, RepairTemplate] = {
         CATALYTIC_CONVERTER,
         EVAP_LEAK,
         BRAKES,
+        BRAKES_DRUM,
         SUSPENSION,
         CHARGING_BATTERY,
         COOLING_SYSTEM,
@@ -471,3 +502,11 @@ def select_template(
             return _TEMPLATES[category]
 
     return None
+
+
+def get_template(category: str) -> RepairTemplate | None:
+    """Look up a template by category name, e.g. to swap in a more specific
+    template (brakes_drum) after disambiguating a keyword-matched one
+    (brakes) against real retrieved OEM text. See
+    backend.services.llm.refine_brake_category."""
+    return _TEMPLATES.get(category)

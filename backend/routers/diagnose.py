@@ -1,9 +1,11 @@
+from typing import Any
+
 from fastapi import APIRouter
 
 from backend.core.config import settings
 from backend.schemas import DiagnoseRequest, DiagnoseResponse
 from backend.services.gemini import call_gemini_text
-from backend.services.llm import generate_diagnosis_summary
+from backend.services.llm import generate_diagnosis_summary, refine_brake_category
 
 router = APIRouter()
 
@@ -70,23 +72,28 @@ async def diagnose(request: DiagnoseRequest) -> DiagnoseResponse:
 
     summary = f"Free Diagnosis Summary: Misfire or other symptom detected. Symptoms: {request.symptoms}."
 
-    # Grounded in real retrieved OEM text when the vehicle is already known
-    # from the request (no new VIN-decode network call added here -- this is
+    # Built once, regardless of Gemini key: RAG retrieval (used below to
+    # disambiguate the parts template) doesn't need Gemini, only the summary
+    # grounding does. No new VIN-decode network call added here -- this is
     # the free, pre-payment step, and it never depended on VIN decoding
-    # before; only ground when that info is already cheaply available).
+    # before; only build vin_meta when that info is already cheaply
+    # available from the request itself.
+    vin_meta: dict[str, Any] | None = None
+    if request.vehicle and request.vehicle.make:
+        vin_meta = {
+            "year": str(request.vehicle.year or ""),
+            "make": request.vehicle.make,
+            "model": request.vehicle.model or "",
+            "engine": request.vehicle.engine or "",
+            "drive_type": request.vehicle.drive_type or "",
+        }
+
     # Falls back to the previous ungrounded free-text Gemini call, then to
     # the static default above, exactly as before, when vehicle info isn't
     # provided. See generate_diagnosis_summary for why this differs from
     # repair-step generation's stricter "skip Gemini entirely" fallback.
     if settings.gemini_api_key:
-        if request.vehicle and request.vehicle.make:
-            vin_meta = {
-                "year": str(request.vehicle.year or ""),
-                "make": request.vehicle.make,
-                "model": request.vehicle.model or "",
-                "engine": request.vehicle.engine or "",
-                "drive_type": request.vehicle.drive_type or "",
-            }
+        if vin_meta:
             ai_summary = await generate_diagnosis_summary(
                 vin_meta=vin_meta, symptoms=request.symptoms, obd_codes=obd_list or []
             )
@@ -101,9 +108,20 @@ async def diagnose(request: DiagnoseRequest) -> DiagnoseResponse:
             summary = ai_summary
 
     from backend.pricing import build_cost_breakdown, build_recommended_parts
-    from backend.repair_templates import select_template
+    from backend.repair_templates import get_template, select_template
 
     template = select_template(request.symptoms, obd_list)
+    # Keyword matching alone can't tell disc from drum brakes -- both grind
+    # and squeal -- but this vehicle's own retrieved OEM text can. Only
+    # matters for "brakes" specifically today; other categories don't yet
+    # have a comparably ambiguous sub-type split.
+    if template and template.category == "brakes" and vin_meta:
+        refined_category = refine_brake_category(vin_meta, request.symptoms)
+        if refined_category:
+            refined_template = get_template(refined_category)
+            if refined_template:
+                template = refined_template
+
     vehicle_desc = ""
     if request.vehicle:
         vehicle_desc = " ".join(

@@ -218,3 +218,32 @@ async def generate_chat_reply(
         f"User's question: {message}"
     )
     return await call_gemini_text(prompt, system_prompt=_CHAT_SYSTEM_PROMPT)
+
+
+# Keyword-only symptom matching can't tell disc from drum brakes -- both
+# "grind" and "squeal" -- but the vehicle's own retrieved OEM text can. Used
+# to upgrade a generic "brakes" template match to "brakes_drum" for the
+# diagnose parts/cost estimate, so it doesn't recommend pads/rotors for a
+# vehicle whose real service data describes a shoe/drum job (see
+# backend/routers/diagnose.py).
+_DRUM_BRAKE_KEYWORDS = (
+    "brake shoe",
+    "brake drum",
+    "wheel cylinder",
+    "drum brake",
+    "self-adjuster",
+    "shoe hold down",
+)
+
+
+def refine_brake_category(vin_meta: dict[str, Any], query: str) -> str | None:
+    """Returns "brakes_drum" if retrieved OEM text for this vehicle/query
+    mentions drum-brake-specific terms, None otherwise (caller keeps its
+    default "brakes" template match)."""
+    results = retrieve(query=query, vin_meta=vin_meta, k=3)
+    if not results:
+        return None
+    combined = " ".join(doc["text"].lower() for doc in results)
+    if any(kw in combined for kw in _DRUM_BRAKE_KEYWORDS):
+        return "brakes_drum"
+    return None

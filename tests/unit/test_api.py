@@ -572,6 +572,54 @@ def test_diagnose_no_template_match_has_empty_parts(client):
     assert data["cost_breakdown"]["diy_total"] == 4.00
 
 
+@patch("backend.rag.retriever.retrieve")
+def test_diagnose_disambiguates_drum_brakes_from_retrieved_text(mock_retrieve, client):
+    """A generic 'grinding/squealing brakes' symptom keyword-matches the
+    disc-brake (pad/rotor) template by default -- but if this vehicle's real
+    retrieved OEM text describes a drum-brake job, the parts list must not
+    recommend pads/rotors for a shoe/drum repair. See refine_brake_category."""
+    mock_retrieve.return_value = [
+        {
+            "id": "doc_1",
+            "text": "Remove the brake shoe hold down springs and inspect the wheel cylinder before replacing the drum brake shoes.",
+            "metadata": {"bulletin_number": "T-SB-0235-12"},
+            "distance": 0.05,
+        }
+    ]
+
+    payload = {
+        "vin": "1HGBH41JXMN109186",
+        "symptoms": "Grinding and squealing noise from the brakes when slowing down",
+        "obd_codes": [],
+        "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
+    }
+    response = client.post("/api/diagnose", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    part_names = [p["part_name"] for p in data["recommended_parts"]]
+    assert any("shoe" in n.lower() for n in part_names)
+    assert not any("rotor" in n.lower() for n in part_names)
+
+
+@patch("backend.rag.retriever.retrieve")
+def test_diagnose_keeps_disc_brakes_when_no_drum_signal(mock_retrieve, client):
+    """No RAG hits (or no drum-specific terms in what's retrieved) means the
+    default keyword-matched disc-brake template is left alone."""
+    mock_retrieve.return_value = []
+
+    payload = {
+        "vin": "1HGBH41JXMN109186",
+        "symptoms": "Grinding and squealing noise from the brakes when slowing down",
+        "obd_codes": [],
+        "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
+    }
+    response = client.post("/api/diagnose", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    part_names = [p["part_name"] for p in data["recommended_parts"]]
+    assert any("rotor" in n.lower() for n in part_names)
+
+
 # --- VIN photo OCR (/api/vin/ocr) ---
 
 def test_vin_ocr_rejects_unsupported_content_type(client):

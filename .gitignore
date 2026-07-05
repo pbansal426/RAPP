@@ -17,7 +17,11 @@ htmlcov/
 .coverage
 coverage.xml
 *.log
+# Trailing-slash form only matches real directories -- data/ is now a
+# symlink to an SSD-hosted location (machine-specific absolute path, must
+# never be committed), so also match the bare name to cover that case.
 data/
+data
 
 # Environment secrets — never commit these
 .env
