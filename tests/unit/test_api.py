@@ -474,6 +474,9 @@ def test_create_checkout(client):
     assert "checkout_url" in data
     assert "success-stub" in data["checkout_url"]
     assert "vin=1HGBH41JXMN109186" in data["checkout_url"]
+    # STRIPE_SECRET_KEY is unset in the test environment -- must fall back
+    # to the mock stub, never attempt a real Stripe API call.
+    assert data["mode"] == "mock"
 
 def test_success_stub(client):
     # Redirects back to frontend with parameters
@@ -481,10 +484,11 @@ def test_success_stub(client):
     assert response.status_code == 303
     assert response.headers["location"] == f"{settings.frontend_url}/repair/success?session_id=cs_test_123&vin=1HGBH41JXMN109186"
 
-def test_payments_webhook(client):
-    response = client.post("/api/payments/webhook")
-    assert response.status_code == 200
-    assert response.json() == {"status": "received"}
+def test_payments_webhook_returns_503_when_unconfigured(client):
+    # STRIPE_WEBHOOK_SECRET is unset in the test environment -- the real
+    # endpoint correctly refuses to even attempt signature verification.
+    response = client.post("/api/webhooks/stripe")
+    assert response.status_code == 503
 
 
 def test_synthetic_vin_decoding_success(client):

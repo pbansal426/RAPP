@@ -34,6 +34,10 @@ import type { DiagnosisResponse, VehicleInfo } from '@/lib/types';
 
 interface CheckoutResponse {
   checkout_url: string;
+  // "live" means checkout_url is a real checkout.stripe.com page the user
+  // must actually complete -- "mock" is our own stub that just redirects
+  // straight back (see handlePay).
+  mode: 'mock' | 'live';
 }
 
 const SAFETY_KEYWORDS = ['airbag', 'srs', 'ev battery', 'hybrid battery', 'high voltage', 'fuel line', 'fuel leak'];
@@ -126,14 +130,26 @@ export default function ResultsPage() {
   const handlePay = async () => {
     setPayLoading(true);
     try {
-      const { checkout_url } = await api.post<CheckoutResponse>('/api/payments/create-checkout', {
+      const { checkout_url, mode } = await api.post<CheckoutResponse>('/api/payments/create-checkout', {
         vin,
         price_type: 'single',
+        symptoms,
       });
-      // The mock stub returns a backend URL that just 303s to the frontend
-      // success route. Doing a full-page hop to the backend caused a blank
-      // page when the backend was slow/unreachable, so we stay in the SPA:
-      // pull the session id out and route straight to the success handler.
+
+      if (mode === 'live') {
+        // A real Stripe-hosted Checkout page -- this MUST be a genuine
+        // full-page navigation. The user has to actually enter a card and
+        // complete payment there before Stripe redirects them back to our
+        // success_url; there's no session to "skip ahead" to yet.
+        window.location.href = checkout_url;
+        return;
+      }
+
+      // Mock stub: a backend URL that just 303s straight back to our own
+      // success route with no real payment step in between. Doing a
+      // full-page hop to the backend here caused a blank page when the
+      // backend was slow/unreachable, so we stay in the SPA instead: pull
+      // the session id out and route straight to the success handler.
       let sessionId = 'cs_test_stub';
       try {
         sessionId = new URL(checkout_url).searchParams.get('session_id') || sessionId;

@@ -4,7 +4,7 @@ Kept in one module so the shapes documented in CLAUDE.md's pinned
 Claude/Gemini contract have a single, easy-to-audit source of truth.
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -144,10 +144,15 @@ class RepairChatResponse(BaseModel):
 class CheckoutRequest(BaseModel):
     vin: str
     price_type: str = "single"
+    symptoms: str = ""
 
 
 class CheckoutResponse(BaseModel):
     checkout_url: str
+    # "live" means checkout_url is a real checkout.stripe.com page -- the
+    # frontend must do a genuine full-page redirect, not the SPA shortcut
+    # used for "mock" (our own success-stub, which just 303s straight back).
+    mode: Literal["mock", "live"] = "mock"
 
 
 class VinOcrResponse(BaseModel):
