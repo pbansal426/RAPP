@@ -245,3 +245,33 @@ class SavedRepairResponse(BaseModel):
     payment_session_id: str | None = None
     citations: list[str] | None = None
     saved_at: str | None = None
+
+
+# --- Vehicle safety: live NHTSA recalls/complaints lookups (never ingested
+# into the RAG vector store -- see backend/services/nhtsa_safety.py) ---
+
+
+class RecallInfo(BaseModel):
+    campaign_number: str
+    component: str
+    summary: str
+    consequence: str
+    remedy: str
+    report_received_date: str
+
+
+class RecallsResponse(BaseModel):
+    open_recalls: list[RecallInfo]
+    count: int
+
+
+class ComplaintComponentFrequency(BaseModel):
+    component: str
+    count: int
+
+
+class ComplaintsSummaryResponse(BaseModel):
+    total_complaints: int
+    # Sorted by count descending, capped to a handful -- a full per-complaint
+    # breakdown isn't useful in a summary card.
+    top_components: list[ComplaintComponentFrequency]
