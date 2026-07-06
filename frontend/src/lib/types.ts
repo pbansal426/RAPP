@@ -118,3 +118,30 @@ export interface VinOcrResponse {
   confidence: number;
   decoded_vehicle: VinDecodeResponse | null;
 }
+
+/** GET /api/vehicle-safety/recalls response. Live NHTSA lookup, never
+ * ingested/cached beyond a short server-side TTL -- see CLAUDE.md. */
+export interface RecallInfo {
+  campaign_number: string;
+  component: string;
+  summary: string;
+  consequence: string;
+  remedy: string;
+  report_received_date: string;
+}
+
+export interface RecallsResponse {
+  open_recalls: RecallInfo[];
+  count: number;
+}
+
+/** GET /api/vehicle-safety/complaints-summary response. */
+export interface ComplaintComponentFrequency {
+  component: string;
+  count: number;
+}
+
+export interface ComplaintsSummaryResponse {
+  total_complaints: number;
+  top_components: ComplaintComponentFrequency[];
+}

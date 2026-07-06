@@ -4,7 +4,7 @@ Kept in one module so the shapes documented in CLAUDE.md's pinned
 Claude/Gemini contract have a single, easy-to-audit source of truth.
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -144,10 +144,15 @@ class RepairChatResponse(BaseModel):
 class CheckoutRequest(BaseModel):
     vin: str
     price_type: str = "single"
+    symptoms: str = ""
 
 
 class CheckoutResponse(BaseModel):
     checkout_url: str
+    # "live" means checkout_url is a real checkout.stripe.com page -- the
+    # frontend must do a genuine full-page redirect, not the SPA shortcut
+    # used for "mock" (our own success-stub, which just 303s straight back).
+    mode: Literal["mock", "live"] = "mock"
 
 
 class VinOcrResponse(BaseModel):
@@ -159,22 +164,30 @@ class VinOcrResponse(BaseModel):
 # --- Auth / user accounts ---
 
 
-class SignupRequest(BaseModel):
+class RequestLinkRequest(BaseModel):
     email: str
-    password: str
+    # Only used the first time this email signs in (creates the account);
+    # ignored on subsequent requests for an existing account.
     display_name: str | None = None
 
 
-class LoginRequest(BaseModel):
-    email: str
-    password: str
+class RequestLinkResponse(BaseModel):
+    message: str
+    # Dev-mode only: populated when no email provider (Resend) is
+    # configured, so the link is returned directly instead of emailed. Drop
+    # this field once RESEND_API_KEY is set in every environment that needs
+    # real delivery -- see backend/services/email.py.
+    magic_link: str | None = None
+
+
+class VerifyLinkRequest(BaseModel):
+    token: str
 
 
 class UserResponse(BaseModel):
     id: str
     email: str
     display_name: str | None = None
-    email_verified: bool = False
 
 
 class AuthResponse(BaseModel):
@@ -184,33 +197,6 @@ class AuthResponse(BaseModel):
 
 class UpdateAccountRequest(BaseModel):
     display_name: str | None = None
-
-
-class ForgotPasswordRequest(BaseModel):
-    email: str
-
-
-class ForgotPasswordResponse(BaseModel):
-    message: str
-    # Dev-mode only: no email provider is configured, so the reset link is
-    # returned directly instead of emailed. Drop this field once a real
-    # email provider (Resend/Postmark/SendGrid/...) is wired up.
-    reset_link: str | None = None
-
-
-class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str
-
-
-class SendVerificationResponse(BaseModel):
-    message: str
-    # Dev-mode only: see ForgotPasswordResponse.reset_link.
-    verify_link: str
-
-
-class VerifyEmailRequest(BaseModel):
-    token: str
 
 
 # --- Saved repairs ---
@@ -240,3 +226,33 @@ class SavedRepairResponse(BaseModel):
     payment_session_id: str | None = None
     citations: list[str] | None = None
     saved_at: str | None = None
+
+
+# --- Vehicle safety: live NHTSA recalls/complaints lookups (never ingested
+# into the RAG vector store -- see backend/services/nhtsa_safety.py) ---
+
+
+class RecallInfo(BaseModel):
+    campaign_number: str
+    component: str
+    summary: str
+    consequence: str
+    remedy: str
+    report_received_date: str
+
+
+class RecallsResponse(BaseModel):
+    open_recalls: list[RecallInfo]
+    count: int
+
+
+class ComplaintComponentFrequency(BaseModel):
+    component: str
+    count: int
+
+
+class ComplaintsSummaryResponse(BaseModel):
+    total_complaints: int
+    # Sorted by count descending, capped to a handful -- a full per-complaint
+    # breakdown isn't useful in a summary card.
+    top_components: list[ComplaintComponentFrequency]

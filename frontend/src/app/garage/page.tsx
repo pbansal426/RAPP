@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { logOut, useAuthUser } from '@/lib/auth';
 import { listRepairs, type SavedRepair } from '@/lib/repairs';
+import { completeAllPendingSaves } from '@/lib/pendingSave';
 import { AppLogoMarkIcon } from '@/app/sharedIcons';
 
 export default function GaragePage() {
@@ -13,7 +14,12 @@ export default function GaragePage() {
 
   useEffect(() => {
     if (!user) { setRepairs(null); return; }
-    listRepairs().then(setRepairs).catch(() => setRepairs([]));
+    // Clicking a magic link lands here directly (not back on /repair), so
+    // any save deferred while signed out (see lib/pendingSave.ts) completes
+    // here before the list is fetched.
+    completeAllPendingSaves().finally(() => {
+      listRepairs().then(setRepairs).catch(() => setRepairs([]));
+    });
   }, [user]);
 
   useEffect(() => {
@@ -82,6 +88,22 @@ export default function GaragePage() {
                   </p>
                   <p className="text-muted text-sm" style={{ marginBottom: 4 }}>VIN: {r.vin}</p>
                   <p className="text-muted text-sm" style={{ marginBottom: 4 }}>{r.symptoms}</p>
+                  {r.citations && r.citations.length > 0 && (
+                    <div style={{ marginTop: 8, marginBottom: 4 }}>
+                      <p className="text-muted text-sm" style={{ marginBottom: 6, fontWeight: 700 }}>OEM Sources</p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {r.citations.map((cite, i) => (
+                          <span
+                            key={i}
+                            className="citation-chip"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                          >
+                            {cite}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {r.savedAt && <p className="text-muted text-sm">Saved {r.savedAt}</p>}
                 </div>
               ))}

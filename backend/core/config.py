@@ -27,15 +27,32 @@ class Settings(BaseSettings):
 
     # API endpoints and URLs
     nhtsa_base_url: str = "https://vpic.nhtsa.dot.gov/api/vehicles"
+    # Separate host from nhtsa_base_url -- vpic.nhtsa.dot.gov (VIN decode)
+    # and api.nhtsa.gov (recalls/complaints) are different NHTSA services.
+    nhtsa_safety_api_base: str = "https://api.nhtsa.gov"
     frontend_url: str = "http://localhost:3000"
     backend_url: str = "http://localhost:8000"
 
     # Keys / Secrets (Stubbed / optional)
     gemini_api_key: str | None = None
+    # Magic-link auth email delivery (Resend). Unset by default -- see
+    # backend/services/email.py: request_link() falls back to returning the
+    # link directly in the API response (dev-mode), so auth works with zero
+    # setup and zero cost until this is configured. Resend's free tier
+    # (3,000 emails/mo) only lets the unverified onboarding@resend.dev
+    # sender deliver to the account's own registered email; sending to
+    # arbitrary real users requires verifying a custom domain in Resend.
+    resend_api_key: str | None = None
+    email_from: str = "RAPP <onboarding@resend.dev>"
     stripe_secret_key: str | None = None
     stripe_webhook_secret: str | None = None
     stripe_price_single: str = "price_xxx"
     stripe_price_vin_pass: str = "price_xxx"
+    # Amazon Associates tracking ID (e.g. "rapp-20"). Unset by default -- see
+    # backend/pricing.py's _search_url(), which only appends the `tag` param
+    # when this is configured. Purely additive revenue: doesn't touch
+    # payment processing, doesn't cost anything to leave unset.
+    amazon_associate_tag: str | None = None
 
     # RAG settings
     vector_store: str = "chromadb"

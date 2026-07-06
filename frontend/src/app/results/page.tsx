@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import PartsPurchasePlan from './PartsPurchasePlan';
-import { signUp } from '@/lib/auth';
-import { saveRepair } from '@/lib/repairs';
+import { requestMagicLink, useAuthUser } from '@/lib/auth';
+import { completePendingSave, storePendingSave } from '@/lib/pendingSave';
 import {
   HandToolsIcon,
   SocketSetIcon,
@@ -30,10 +30,20 @@ import {
   ChecklistIcon,
   QualityCheckIcon,
 } from '@/app/sharedIcons';
-import type { DiagnosisResponse, VehicleInfo } from '@/lib/types';
+import { getComplaintsSummary, getOpenRecalls } from '@/lib/vehicleSafety';
+import type {
+  ComplaintsSummaryResponse,
+  DiagnosisResponse,
+  RecallsResponse,
+  VehicleInfo,
+} from '@/lib/types';
 
 interface CheckoutResponse {
   checkout_url: string;
+  // "live" means checkout_url is a real checkout.stripe.com page the user
+  // must actually complete -- "mock" is our own stub that just redirects
+  // straight back (see handlePay).
+  mode: 'mock' | 'live';
 }
 
 const SAFETY_KEYWORDS = ['airbag', 'srs', 'ev battery', 'hybrid battery', 'high voltage', 'fuel line', 'fuel leak'];
@@ -45,28 +55,37 @@ export default function ResultsPage() {
   const [diagnosis, setDiagnosis] = useState<DiagnosisResponse | null>(null);
   const [vinData, setVinData] = useState<VehicleInfo | null>(null);
   const [safetyWarning, setSafetyWarning] = useState<string | null>(null);
+  const [recalls, setRecalls] = useState<RecallsResponse | null>(null);
+  const [complaintsSummary, setComplaintsSummary] = useState<ComplaintsSummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [payLoading, setPayLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [ownedTools, setOwnedTools] = useState<string[]>([]);
+  const { user: authUser } = useAuthUser();
 
-  // Garage Vault Sign-up State
+  // Garage Vault Sign-up State (magic-link -- see SaveGuidePrompt.tsx for
+  // why this can't complete synchronously)
   const [garageEmail, setGarageEmail] = useState('');
-  const [garagePassword, setGaragePassword] = useState('');
   const [garageName, setGarageName] = useState('');
   const [garageSubmitting, setGarageSubmitting] = useState(false);
   const [garageError, setGarageError] = useState<string | null>(null);
+  const [garageSent, setGarageSent] = useState(false);
+  const [garageDevLink, setGarageDevLink] = useState<string | null>(null);
   const [garageSaved, setGarageSaved] = useState(false);
 
+  useEffect(() => {
+    if (!authUser || !vin) return;
+    completePendingSave(vin).then((saved) => { if (saved) setGarageSaved(true); });
+  }, [authUser, vin]);
+
   const handleGarageSignUp = async () => {
-    if (!garageEmail.trim() || !garagePassword.trim()) return;
+    if (!garageEmail.trim()) return;
     setGarageSubmitting(true);
     setGarageError(null);
     try {
-      await signUp(garageEmail.trim(), garagePassword, garageName.trim() || undefined);
       const paymentSessionId = localStorage.getItem(`rapp_unlocked_${vin}`) ?? undefined;
-      await saveRepair({
+      storePendingSave(vin, {
         vin,
         year: vinData ? String(vinData.year ?? '') : undefined,
         make: vinData ? String(vinData.make ?? '') : undefined,
@@ -76,9 +95,11 @@ export default function ResultsPage() {
         symptoms,
         paymentSessionId,
       });
-      setGarageSaved(true);
+      const res = await requestMagicLink(garageEmail.trim(), garageName.trim() || undefined);
+      setGarageSent(true);
+      setGarageDevLink(res.magicLink);
     } catch (err) {
-      setGarageError(err instanceof Error ? err.message : 'Could not create your account. Please try again.');
+      setGarageError(err instanceof Error ? err.message : 'Could not send a sign-in link. Please try again.');
     } finally {
       setGarageSubmitting(false);
     }
@@ -109,6 +130,22 @@ export default function ResultsPage() {
     const parsedVehicle: VehicleInfo | null = storedVinData ? JSON.parse(storedVinData) : null;
     if (parsedVehicle) setVinData(parsedVehicle);
 
+    // Recalls/complaints are independent of symptoms (they exist whether or
+    // not this visit's symptom matches one) and free to look up -- fire
+    // them as soon as year/make/model are known, don't gate on the
+    // diagnose call below. Both endpoints degrade to an empty result
+    // server-side on failure, so a rejected promise here would only mean a
+    // genuine frontend/network issue -- still just silently skip, since
+    // this is supplementary trust-building content, not core to the page.
+    if (parsedVehicle?.year && parsedVehicle.make && parsedVehicle.model) {
+      getOpenRecalls(parsedVehicle.year, parsedVehicle.make, parsedVehicle.model)
+        .then(setRecalls)
+        .catch(() => {});
+      getComplaintsSummary(parsedVehicle.year, parsedVehicle.make, parsedVehicle.model)
+        .then(setComplaintsSummary)
+        .catch(() => {});
+    }
+
     const obdCodes = JSON.parse(localStorage.getItem('rapp_obd_codes') ?? '[]') as string[];
 
     api.post<DiagnosisResponse>('/api/diagnose', {
@@ -118,22 +155,61 @@ export default function ResultsPage() {
       tools,
       vehicle: parsedVehicle,
     })
-      .then(setDiagnosis)
+      .then((res) => {
+        setDiagnosis(res);
+        // Persisted so /repair can render real parts data instead of
+        // placeholder text -- see rapp_parts_{vin} in repair/page.tsx.
+        localStorage.setItem(`rapp_parts_${storedVin}`, JSON.stringify(res.recommended_parts ?? []));
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Diagnosis failed.'))
       .finally(() => setLoading(false));
   }, [router]);
 
+  // Best-effort background warm-up: fired the moment the user shows purchase
+  // intent (clicking Unlock), not on every free diagnosis, so it doesn't
+  // burn the shared Gemini free-tier quota on visitors who never pay. Once
+  // real Stripe Checkout replaces the mock redirect, this is what lets
+  // /repair load instantly instead of generating the guide after payment.
+  const pregenerateRepairGuide = () => {
+    if (!vin || localStorage.getItem(`rapp_repair_${vin}`)) return;
+    const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
+    const obdCodes = JSON.parse(localStorage.getItem('rapp_obd_codes') ?? '[]') as string[];
+    api.post<{ repair_steps: string[]; citations: string[] }>('/api/repair', {
+      vin,
+      symptoms,
+      obd_codes: obdCodes,
+      tools,
+      stripe_session_id: 'pregenerate-on-intent',
+      vehicle: vinData,
+    })
+      .then((res) => localStorage.setItem(`rapp_repair_${vin}`, JSON.stringify(res)))
+      .catch(() => { /* best-effort only -- /repair falls back to its own fetch */ });
+  };
+
   const handlePay = async () => {
     setPayLoading(true);
+    pregenerateRepairGuide();
     try {
-      const { checkout_url } = await api.post<CheckoutResponse>('/api/payments/create-checkout', {
+      const { checkout_url, mode } = await api.post<CheckoutResponse>('/api/payments/create-checkout', {
         vin,
         price_type: 'single',
+        symptoms,
       });
-      // The mock stub returns a backend URL that just 303s to the frontend
-      // success route. Doing a full-page hop to the backend caused a blank
-      // page when the backend was slow/unreachable, so we stay in the SPA:
-      // pull the session id out and route straight to the success handler.
+
+      if (mode === 'live') {
+        // A real Stripe-hosted Checkout page -- this MUST be a genuine
+        // full-page navigation. The user has to actually enter a card and
+        // complete payment there before Stripe redirects them back to our
+        // success_url; there's no session to "skip ahead" to yet.
+        window.location.href = checkout_url;
+        return;
+      }
+
+      // Mock stub: a backend URL that just 303s straight back to our own
+      // success route with no real payment step in between. Doing a
+      // full-page hop to the backend here caused a blank page when the
+      // backend was slow/unreachable, so we stay in the SPA instead: pull
+      // the session id out and route straight to the success handler.
       let sessionId = 'cs_test_stub';
       try {
         sessionId = new URL(checkout_url).searchParams.get('session_id') || sessionId;
@@ -201,12 +277,63 @@ export default function ResultsPage() {
       {safetyWarning && (
         <div
           data-testid="safety-warning-banner"
-          className="safety-banner border-orange-500 bg-orange-950 text-orange-500"
+          className="safety-banner border-red-500 bg-red-950 text-red-500"
           role="alert"
           aria-live="assertive"
         >
           <span className="safety-banner-icon" aria-hidden="true"><AlertTriangleIcon size={20} /></span>
           <span>{safetyWarning}</span>
+        </div>
+      )}
+
+      {/* ── NHTSA open recalls: live lookup, never a stale ingested snapshot ── */}
+      {recalls && recalls.count > 0 && (
+        <div
+          data-testid="open-recalls-banner"
+          className="card"
+          style={{ border: '1px solid var(--accent-red)' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <AlertTriangleIcon size={20} />
+            <p className="card-label" style={{ margin: 0, color: 'var(--accent-red)' }}>
+              {recalls.count} Open Recall{recalls.count > 1 ? 's' : ''} — Free Dealer Repair Available
+            </p>
+          </div>
+          <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
+            NHTSA lists {recalls.count} open safety recall{recalls.count > 1 ? 's' : ''} for this vehicle. Manufacturer recalls are repaired free of charge at any dealership.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {recalls.open_recalls.map((r) => (
+              <div key={r.campaign_number} style={{ borderTop: '1px solid var(--border-color, rgba(255,255,255,0.1))', paddingTop: 10 }}>
+                <p style={{ fontWeight: 700, marginBottom: 4 }}>{r.component || 'Recall'} — Campaign #{r.campaign_number}</p>
+                <p className="text-muted text-sm" style={{ marginBottom: 4 }}>{r.summary}</p>
+                <p className="text-muted text-sm">{r.remedy}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {recalls && recalls.count === 0 && (
+        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <CheckCircleIcon size={16} style={{ color: '#4ade80' }} />
+          <span className="text-muted text-sm">No open NHTSA recalls found for this vehicle as of today.</span>
+        </div>
+      )}
+
+      {/* ── NHTSA complaints: unverified consumer reports, statistical signal only ── */}
+      {complaintsSummary && complaintsSummary.total_complaints > 0 && (
+        <div className="card">
+          <p className="card-label" style={{ marginBottom: 4 }}>Common Reported Issues</p>
+          <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
+            Based on {complaintsSummary.total_complaints} unverified NHTSA consumer complaints for this vehicle — not confirmed defects, just what owners report most.
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {complaintsSummary.top_components.map((c) => (
+              <span key={c.component} className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {c.component} ({c.count})
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -395,11 +522,28 @@ export default function ResultsPage() {
             </div>
             <a href="/garage" className="btn btn-secondary" style={{ width: 'auto', padding: '0 18px', marginTop: 8 }}>Go to My Garage →</a>
           </div>
+        ) : garageSent ? (
+          <div style={{ marginTop: 10 }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: 4 }}>Check Your Email</h3>
+            <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
+              We sent a sign-in link to {garageEmail.trim()}. Click it to finish saving to your garage.
+            </p>
+            {garageDevLink && (
+              <>
+                <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
+                  No email provider is configured for this environment — use the link below directly.
+                </p>
+                <a href={garageDevLink} className="btn btn-primary" style={{ width: 'auto', padding: '0 18px' }}>
+                  Sign In &amp; Save →
+                </a>
+              </>
+            )}
+          </div>
         ) : (
           <div style={{ marginTop: 10 }}>
             <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: 4 }}>Save to My Garage &amp; Keep Guide Forever</h3>
             <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
-              Create a free account to permanently archive your vehicle profile, diagnostic guide, and payment preferences.
+              Get a free account (no password, just email) to permanently archive your vehicle profile, diagnostic guide, and payment preferences.
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 380 }}>
@@ -419,22 +563,14 @@ export default function ResultsPage() {
                 onChange={(e) => setGarageEmail(e.target.value)}
                 style={{ padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
               />
-              <input
-                className="input"
-                type="password"
-                placeholder="Password"
-                value={garagePassword}
-                onChange={(e) => setGaragePassword(e.target.value)}
-                style={{ padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
-              />
               {garageError && <p style={{ color: 'var(--accent-red)', fontSize: '0.85rem', margin: 0 }}>{garageError}</p>}
               <button
                 className="btn btn-primary"
                 onClick={handleGarageSignUp}
-                disabled={garageSubmitting || !garageEmail.trim() || !garagePassword.trim()}
+                disabled={garageSubmitting || !garageEmail.trim()}
                 style={{ marginTop: 6, minHeight: 40 }}
               >
-                {garageSubmitting ? <><span className="loading-spinner" aria-hidden="true" /> Saving…</> : 'Save to My Garage'}
+                {garageSubmitting ? <><span className="loading-spinner" aria-hidden="true" /> Sending…</> : 'Send Sign-In Link & Save'}
               </button>
             </div>
           </div>

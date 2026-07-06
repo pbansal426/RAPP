@@ -32,10 +32,13 @@ def client():
     app.dependency_overrides.pop(get_db, None)
 
 
-def _auth_headers(client, email="repairs@example.com", password="hunter2"):
-    signup = client.post("/api/auth/signup", json={"email": email, "password": password})
-    token = signup.json()["token"]
-    return {"Authorization": f"Bearer {token}"}
+def _auth_headers(client, email="repairs@example.com"):
+    # No RESEND_API_KEY is set in tests, so request-link always returns the
+    # magic link directly (dev-mode) instead of emailing it.
+    request = client.post("/api/auth/request-link", json={"email": email})
+    magic_token = request.json()["magic_link"].split("token=")[1]
+    verify = client.post("/api/auth/verify-link", json={"token": magic_token})
+    return {"Authorization": f"Bearer {verify.json()['token']}"}
 
 
 def test_save_repair_requires_auth(client):

@@ -1,10 +1,10 @@
 'use client';
 
 import { useAuthUser } from '@/lib/auth';
+import ThemeToggle from './ThemeToggle';
 
 export default function HeaderAuthLink() {
   const { user, loading, configured } = useAuthUser();
-  if (!configured || loading) return null;
 
   const linkStyle = {
     fontSize: '0.82rem',
@@ -17,14 +17,20 @@ export default function HeaderAuthLink() {
   } as const;
 
   return (
-    <div style={{ position: 'fixed', top: 14, right: 16, zIndex: 500, display: 'flex', gap: 8 }}>
-      {user ? (
-        <>
-          <a href="/garage" style={{ ...linkStyle, color: 'var(--text-secondary)' }}>My Garage</a>
-          <a href="/settings" style={{ ...linkStyle, color: 'var(--text-secondary)' }}>Settings</a>
-        </>
-      ) : (
-        <a href="/signin" style={{ ...linkStyle, color: 'var(--accent-orange)' }}>Log In</a>
+    <div style={{ position: 'fixed', top: 14, right: 16, zIndex: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+      {/* Temporary home for the theme toggle until the Phase B navbar
+          replaces this whole corner widget -- see globals.css's design
+          tokens and lib/theme.ts. */}
+      <ThemeToggle />
+      {configured && !loading && (
+        user ? (
+          <>
+            <a href="/garage" style={{ ...linkStyle, color: 'var(--text-secondary)' }}>My Garage</a>
+            <a href="/settings" style={{ ...linkStyle, color: 'var(--text-secondary)' }}>Settings</a>
+          </>
+        ) : (
+          <a href="/signin" style={{ ...linkStyle, color: 'var(--accent-orange)' }}>Log In</a>
+        )
       )}
     </div>
   );

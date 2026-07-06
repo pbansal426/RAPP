@@ -1,4 +1,4 @@
-.PHONY: install dev test lint type-check docker-up docker-down clean
+.PHONY: install dev test lint type-check docker-up docker-down clean backup-db
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 install:
@@ -70,6 +70,11 @@ docker-clean:
 	docker compose down -v --rmi local
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
+# Snapshot the irreplaceable rapp.db (accounts) to the external SSD. Safe to spam;
+# no-ops cleanly when the SSD is unplugged. Also runs automatically on server startup.
+backup-db:
+	uv run python -m backend.core.backup
+
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true

@@ -1,5 +1,9 @@
 from typing import Any
 
+import structlog
+
+logger = structlog.get_logger()
+
 
 def retrieve(query: str, vin_meta: dict[str, Any], k: int = 5) -> list[dict[str, Any]]:
     """
@@ -20,8 +24,6 @@ def retrieve(query: str, vin_meta: dict[str, Any], k: int = 5) -> list[dict[str,
         List of relevant manual paragraphs and their citations.
     """
     from backend.rag import get_vector_store  # Local import prevents circular deps
-
-    store = get_vector_store()
 
     # Normalize metadata keys for the search filter
     filter_metadata: dict[str, Any] = {}
@@ -59,4 +61,14 @@ def retrieve(query: str, vin_meta: dict[str, Any], k: int = 5) -> list[dict[str,
             except (TypeError, ValueError):
                 pass
 
-    return store.search(query=query, filter_metadata=filter_metadata, k=k)
+    # Fail open: if the vector store is unavailable (e.g. the knowledge-base SSD is
+    # unplugged) or the query errors, return no snippets so callers fall back to
+    # Gemini/templates instead of surfacing a 500.
+    try:
+        store = get_vector_store()
+        return store.search(query=query, filter_metadata=filter_metadata, k=k)
+    except Exception as exc:  # noqa: BLE001 - RAG is a best-effort augmentation
+        logger.warning(
+            "RAG retrieval unavailable; returning no snippets", error=str(exc)
+        )
+        return []
