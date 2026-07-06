@@ -96,3 +96,30 @@ def test_every_template_produces_a_valid_cost_breakdown():
             breakdown["independent_shop_range"][0]
             <= breakdown["independent_shop_range"][1]
         )
+
+
+def test_amazon_link_untagged_by_default():
+    options = build_part_options("2018 Honda Civic", "Oxygen sensor", 40.0, 120.0)
+    amazon_urls = [opt["purchase_url"] for opt in options if "amazon.com" in opt["purchase_url"]]
+    assert amazon_urls
+    assert all("tag=" not in url for url in amazon_urls)
+
+
+def test_amazon_link_carries_associate_tag_when_configured(monkeypatch):
+    from backend.core.config import settings
+
+    monkeypatch.setattr(settings, "amazon_associate_tag", "rapp-20")
+    options = build_part_options("2018 Honda Civic", "Oxygen sensor", 40.0, 120.0)
+    amazon_urls = [opt["purchase_url"] for opt in options if "amazon.com" in opt["purchase_url"]]
+    assert amazon_urls
+    assert all("tag=rapp-20" in url for url in amazon_urls)
+
+
+def test_non_amazon_links_never_carry_a_tag_param(monkeypatch):
+    from backend.core.config import settings
+
+    monkeypatch.setattr(settings, "amazon_associate_tag", "rapp-20")
+    options = build_part_options("2018 Honda Civic", "Oxygen sensor", 40.0, 120.0)
+    non_amazon_urls = [opt["purchase_url"] for opt in options if "amazon.com" not in opt["purchase_url"]]
+    assert non_amazon_urls
+    assert all("tag=" not in url for url in non_amazon_urls)
