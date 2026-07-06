@@ -1,6 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
 
 /* ── Design tokens ──────────────────────────────────────────────────────── */
+/* Dark is the default at :root (matches the frozen E2E requirement that a
+   fresh page load with no stored theme preference renders dark -- see
+   tests/e2e-mvp-flow.spec.ts and frontend/src/lib/theme.ts). Explicit
+   [data-theme="light"] / [data-theme="dark"] blocks below override these
+   for a signed-in preference or "System" resolving against the OS. */
 :root {
   --bg-primary:    #0F172A;
   --bg-surface:    #1E293B;
@@ -11,9 +16,79 @@
   --accent-orange: #F97316;
   --accent-yellow: #fbbf24;
   --accent-red:    #ef4444;
+  /* Trust/verification (OEM citation badges) -- a deliberately deeper,
+     more "forest" green than the app's other accents, so a citation reads
+     as authoritative rather than as a generic success/positive color. */
+  --accent-green:        #10B981;
+  --accent-green-soft:   rgba(16, 185, 129, 0.15);
+  --accent-green-border: rgba(16, 185, 129, 0.35);
+  --accent-blue:       #60a5fa;
+  --accent-blue-soft:   rgba(59, 130, 246, 0.15);
+  --accent-blue-border: rgba(59, 130, 246, 0.35);
+  /* Subtle overlay scale used for hairline borders/tints on top of a card
+     surface (vehicle hero card, spec chips, etc.) -- white-tinted in dark
+     mode, dark-tinted in light mode, so these stay visible either way
+     instead of a literal white overlay vanishing on a light background. */
+  --overlay-04: rgba(255, 255, 255, 0.04);
+  --overlay-05: rgba(255, 255, 255, 0.05);
+  --overlay-08: rgba(255, 255, 255, 0.08);
+  --overlay-12: rgba(255, 255, 255, 0.12);
+  --stripe-color:     rgba(42, 42, 61, 0.3);
+  --bg-chat-panel:    rgba(26, 26, 38, 0.95);
+  --spinner-track:    rgba(255, 255, 255, 0.2);
+  --spinner-head:     #ffffff;
+  --danger-bg:        #450a0a;
   --radius:        12px;
   --radius-sm:     8px;
   --transition:    0.18s ease;
+}
+
+:root[data-theme="dark"] {
+  --bg-primary: #0F172A; --bg-surface: #1E293B; --bg-elevated: #334155;
+  --border: rgba(255, 255, 255, 0.08);
+  --text-primary: #f0f0f8; --text-secondary: #9090b0;
+  --accent-orange: #F97316; --accent-yellow: #fbbf24; --accent-red: #ef4444;
+  --accent-green: #10B981; --accent-green-soft: rgba(16, 185, 129, 0.15);
+  --accent-green-border: rgba(16, 185, 129, 0.35);
+  --accent-blue: #60a5fa; --accent-blue-soft: rgba(59, 130, 246, 0.15);
+  --accent-blue-border: rgba(59, 130, 246, 0.35);
+  --overlay-04: rgba(255, 255, 255, 0.04);
+  --overlay-05: rgba(255, 255, 255, 0.05);
+  --overlay-08: rgba(255, 255, 255, 0.08);
+  --overlay-12: rgba(255, 255, 255, 0.12);
+  --stripe-color: rgba(42, 42, 61, 0.3);
+  --bg-chat-panel: rgba(26, 26, 38, 0.95);
+  --spinner-track: rgba(255, 255, 255, 0.2); --spinner-head: #ffffff;
+  --danger-bg: #450a0a;
+}
+
+:root[data-theme="light"] {
+  --bg-primary:    #F8FAFC;
+  --bg-surface:    #FFFFFF;
+  --bg-elevated:   #F1F5F9;
+  --border:        rgba(15, 23, 42, 0.10);
+  --text-primary:  #0F172A;
+  --text-secondary:#54607a;
+  --accent-orange: #F97316;
+  --accent-yellow: #d97706;
+  --accent-red:    #dc2626;
+  --accent-green:        #059669;
+  --accent-green-soft:   rgba(5, 150, 105, 0.12);
+  --accent-green-border: rgba(5, 150, 105, 0.3);
+  --accent-blue:       #2563eb;
+  --accent-blue-soft:   rgba(37, 99, 235, 0.12);
+  --accent-blue-border: rgba(37, 99, 235, 0.3);
+  /* Same overlay scale, dark-tinted instead of white-tinted -- keeps
+     hairline borders/tints visible against the light surfaces above. */
+  --overlay-04: rgba(15, 23, 42, 0.04);
+  --overlay-05: rgba(15, 23, 42, 0.05);
+  --overlay-08: rgba(15, 23, 42, 0.08);
+  --overlay-12: rgba(15, 23, 42, 0.12);
+  --stripe-color:  rgba(148, 163, 184, 0.25);
+  --bg-chat-panel: rgba(255, 255, 255, 0.9);
+  --spinner-track: rgba(15, 23, 42, 0.15);
+  --spinner-head:  #0F172A;
+  --danger-bg:     #fef2f2;
 }
 
 /* ── Reset ──────────────────────────────────────────────────────────────── */
@@ -32,14 +107,22 @@ body {
   letter-spacing: -0.01em;
 }
 
-/* Tailwind-compat utility classes used by Playwright selectors */
-.dark { background-color: #0f172a; color: #f8fafc; }
-.bg-slate-900 { background-color: #0f172a; }
+/* Tailwind-compat class NAMES used by the frozen Playwright selector
+   (tests/e2e-mvp-flow.spec.ts: "dark mode as default") -- deliberately
+   carry no color declarations of their own. body's actual background/text
+   color comes entirely from the --bg-primary/--text-primary tokens below,
+   which do react to the active theme; a class selector here would beat
+   that element-level rule on specificity and permanently pin the page to
+   dark regardless of data-theme. */
+.dark, .bg-slate-900 {}
 
-/* Safety banner classes (Playwright expects these class names) */
-.border-orange-500 { border: 2px solid #f97316; }
-.bg-orange-950     { background-color: #431407; }
-.text-orange-500   { color: #f97316; }
+/* Safety banner classes (Playwright expects these class names). Red is
+   reserved strictly for this critical-danger signal -- see globals.css's
+   token block -- so these are named/colored red, not the orange used
+   everywhere else in the app for regular CTAs/branding. */
+.border-red-500 { border: 2px solid var(--accent-red); }
+.bg-red-950     { background-color: var(--danger-bg); }
+.text-red-500   { color: var(--accent-red); }
 
 /* ── Layout ─────────────────────────────────────────────────────────────── */
 .page {
@@ -237,8 +320,8 @@ body {
     -45deg,
     transparent,
     transparent 8px,
-    rgba(42,42,61,0.3) 8px,
-    rgba(42,42,61,0.3) 16px
+    var(--stripe-color) 8px,
+    var(--stripe-color) 16px
   );
 }
 
@@ -265,7 +348,7 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.badge-free { background: rgba(34,197,94,0.15); color: #4ade80; }
+.badge-free { background: var(--accent-green-soft); color: var(--accent-green); }
 .badge-locked { background: rgba(249,115,22,0.15); color: var(--accent-orange); }
 
 /* ── Repair steps ────────────────────────────────────────────────────────── */
@@ -305,17 +388,20 @@ body {
 .step-text { font-size: 0.95rem; line-height: 1.55; }
 
 /* ── Citation chip ───────────────────────────────────────────────────────── */
+/* Green, not yellow -- reserved specifically for OEM-verified trust
+   signals (citations, TSB references), distinct from the yellow used for
+   torque-spec callouts below. */
 .citation-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: rgba(251,191,36,0.1);
-  border: 1px solid rgba(251,191,36,0.25);
+  background: var(--accent-green-soft);
+  border: 1px solid var(--accent-green-border);
   border-radius: 100px;
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--accent-yellow);
+  color: var(--accent-green);
 }
 
 /* ── Vehicle info strip ──────────────────────────────────────────────────── */
@@ -348,8 +434,8 @@ body {
 
 .loading-spinner {
   width: 20px; height: 20px;
-  border: 2px solid rgba(255,255,255,0.2);
-  border-top-color: #fff;
+  border: 2px solid var(--spinner-track);
+  border-top-color: var(--spinner-head);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   display: inline-block;
@@ -397,17 +483,17 @@ body {
   font-weight: 700;
 }
 .price-row-highlight td { color: #fff; }
-.price-val-green { color: #4ade80; font-weight: 800; font-size: 1.1rem; }
+.price-val-green { color: var(--accent-green); font-weight: 800; font-size: 1.1rem; }
 
 .tool-match-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  background: rgba(34,197,94,0.12);
-  border: 1px solid rgba(34,197,94,0.3);
+  background: var(--accent-green-soft);
+  border: 1px solid var(--accent-green-border);
   border-radius: 100px;
-  color: #4ade80;
+  color: var(--accent-green);
   font-size: 0.88rem;
   font-weight: 600;
   margin-top: 12px;
@@ -442,9 +528,9 @@ body {
 }
 .tool-chip {
   display: inline-block;
-  background: rgba(59,130,246,0.15);
-  border: 1px solid rgba(59,130,246,0.35);
-  color: #60a5fa;
+  background: var(--accent-blue-soft);
+  border: 1px solid var(--accent-blue-border);
+  color: var(--accent-blue);
   padding: 2px 8px;
   border-radius: 6px;
   font-size: 0.82rem;
@@ -480,8 +566,8 @@ body {
   display: flex;
   align-items: center;
   gap: 20px;
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.4), rgba(15, 23, 42, 0.6));
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, var(--overlay-08), var(--overlay-12)), var(--bg-surface);
+  border: 1px solid var(--overlay-08);
   border-radius: 16px;
   padding: 24px 28px;
   margin-bottom: 24px;
@@ -494,8 +580,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--overlay-05);
+  border: 1px solid var(--overlay-12);
   border-radius: 14px;
   padding: 10px;
   transition: transform 0.2s ease, border-color 0.2s ease;
@@ -526,10 +612,10 @@ body {
 }
 .vehicle-hero-sub span {
   display: inline-block;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--overlay-04);
   padding: 6px 12px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--overlay-08);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -600,7 +686,7 @@ body {
   max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
-  background: rgba(26, 26, 38, 0.95);
+  background: var(--bg-chat-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;

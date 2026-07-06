@@ -145,7 +145,10 @@ test.describe('Automotive AI Repair Engine - Phase 1 MVP Flow', () => {
     const safetyBanner = page.locator('[data-testid="safety-warning-banner"]');
     await expect(safetyBanner).toBeVisible();
     await expect(safetyBanner).toContainText(/Airbag/i);
-    await expect(safetyBanner).toHaveClass(/border-orange-500|bg-orange-950|text-orange-500/);
+    // Red is reserved strictly for this critical-danger signal -- see
+    // globals.css's design tokens -- distinct from the orange used
+    // elsewhere in the app for regular CTAs/branding.
+    await expect(safetyBanner).toHaveClass(/border-red-500|bg-red-950|text-red-500/);
 
     // Ensure it is non-dismissible (does not contain a close button)
     const closeBtn = safetyBanner.locator('button, [role="button"], .close-btn');
