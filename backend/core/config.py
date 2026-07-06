@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str | None = None
     stripe_price_single: str = "price_xxx"
     stripe_price_vin_pass: str = "price_xxx"
+    # Amazon Associates tracking ID (e.g. "rapp-20"). Unset by default -- see
+    # backend/pricing.py's _search_url(), which only appends the `tag` param
+    # when this is configured. Purely additive revenue: doesn't touch
+    # payment processing, doesn't cost anything to leave unset.
+    amazon_associate_tag: str | None = None
 
     # RAG settings
     vector_store: str = "chromadb"

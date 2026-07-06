@@ -16,6 +16,7 @@ import re
 from typing import Any
 from urllib.parse import quote_plus
 
+from backend.core.config import settings
 from backend.repair_templates import RepairTemplate
 
 _PRICE_RANGE_RE = re.compile(r"\$(\d+(?:\.\d+)?)(?:\s*-\s*\$(\d+(?:\.\d+)?))?")
@@ -60,7 +61,15 @@ def parse_part_price(part_str: str) -> tuple[str, float, float]:
 def _search_url(retailer: str, query: str) -> str:
     q = quote_plus(query.strip())
     if retailer == "amazon":
-        return f"https://www.amazon.com/s?k={q}&i=automotive"
+        url = f"https://www.amazon.com/s?k={q}&i=automotive"
+        # Amazon Associates tracking -- purely additive revenue (a
+        # commission on whatever the user was already about to buy), no
+        # payment processing involved. Only appended once a real
+        # associate tag is configured; the link works identically
+        # without one, just untracked.
+        if settings.amazon_associate_tag:
+            url += f"&tag={quote_plus(settings.amazon_associate_tag)}"
+        return url
     if retailer == "autozone":
         return f"https://www.autozone.com/searchresult?searchText={q}"
     if retailer == "rockauto":
