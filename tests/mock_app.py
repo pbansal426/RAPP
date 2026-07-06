@@ -331,9 +331,9 @@ async def results():
             background-color: #0f172a;
             color: #f8fafc;
         }}
-        .border-orange-500 {{ border: 2px solid #f97316; }}
-        .bg-orange-950 {{ background-color: #431407; }}
-        .text-orange-500 {{ color: #f97316; }}
+        .border-red-500 {{ border: 2px solid #ef4444; }}
+        .bg-red-950 {{ background-color: #450a0a; }}
+        .text-red-500 {{ color: #ef4444; }}
     </style>
 </head>
 <body class="dark bg-slate-900">
@@ -400,7 +400,7 @@ async def results():
         if (isAirbag && !missingWarnings) {{
             const banner = document.createElement('div');
             banner.setAttribute('data-testid', 'safety-warning-banner');
-            banner.className = 'border-orange-500 bg-orange-950 text-orange-500 p-4 mb-4';
+            banner.className = 'border-red-500 bg-red-950 text-red-500 p-4 mb-4';
             banner.innerText = 'DANGER: SRS / Airbag systems are explosive and safety-critical. Professional service is highly recommended.';
             document.getElementById('warning-container').appendChild(banner);
         }}

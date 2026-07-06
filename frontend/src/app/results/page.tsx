@@ -201,7 +201,7 @@ export default function ResultsPage() {
       {safetyWarning && (
         <div
           data-testid="safety-warning-banner"
-          className="safety-banner border-orange-500 bg-orange-950 text-orange-500"
+          className="safety-banner border-red-500 bg-red-950 text-red-500"
           role="alert"
           aria-live="assertive"
         >
