@@ -1,6 +1,7 @@
 import abc
 import os
 import time
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -78,6 +79,18 @@ class ChromaVectorStore(VectorStore):
             ) from err
 
         if persistent_path:
+            # Same broken-symlink check as backend/core/database.py -- an
+            # external-drive-backed data/ that isn't currently mounted would
+            # otherwise surface here as a much less clear low-level chromadb
+            # I/O error the first time RAG retrieval actually runs.
+            root_segment = Path(persistent_path.lstrip("./").split("/")[0])
+            if root_segment.is_symlink() and not root_segment.exists():
+                target = os.readlink(root_segment)
+                raise RuntimeError(
+                    f"'{root_segment}' is a symlink to '{target}', which isn't "
+                    "currently accessible. If this points at an external drive, "
+                    "plug it in and make sure it's mounted, then restart the backend."
+                )
             self.client = chromadb.PersistentClient(
                 path=persistent_path, settings=Settings(anonymized_telemetry=False)
             )
