@@ -22,9 +22,7 @@ class DbUser(Base):
 
     id: Mapped[str] = mapped_column(primary_key=True, index=True)  # UUID string
     email: Mapped[str] = mapped_column(unique=True, index=True)
-    hashed_password: Mapped[str]
     display_name: Mapped[str | None] = mapped_column(default=None)
-    email_verified: Mapped[bool] = mapped_column(default=False)
     saved_payment_method: Mapped[bool] = mapped_column(default=False)
     last_payment_session_id: Mapped[str | None] = mapped_column(default=None)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
@@ -55,3 +53,17 @@ class DbSavedRepair(Base):
     saved_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     user: Mapped["DbUser"] = relationship(back_populates="repairs")
+
+
+class UsedVerifyToken(Base):
+    """Marks a magic-link verify token's `jti` as already consumed.
+
+    Enforces single-use: without this, a forwarded/screenshotted/browser-
+    history magic link could be replayed any number of times within its
+    15-minute expiry window, each replay minting a fresh 7-day session.
+    """
+
+    __tablename__ = "used_verify_tokens"
+
+    jti: Mapped[str] = mapped_column(primary_key=True)
+    used_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)

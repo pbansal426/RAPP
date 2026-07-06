@@ -9,14 +9,12 @@ export interface AuthUser {
   uid: string;
   email: string;
   displayName: string | null;
-  emailVerified: boolean;
 }
 
 interface UserResponse {
   id: string;
   email: string;
   display_name: string | null;
-  email_verified: boolean;
 }
 
 interface AuthResponse {
@@ -29,14 +27,13 @@ function toAuthUser(user: UserResponse): AuthUser {
     uid: user.id,
     email: user.email,
     displayName: user.display_name,
-    emailVerified: user.email_verified,
   };
 }
 
 // Firebase's onAuthStateChanged gave every useAuthUser() instance a live
 // stream of auth changes; a plain REST call doesn't, so we replicate that
-// with a tiny pub/sub so signUp/logIn/logOut are reflected immediately by
-// any mounted useAuthUser() consumer, not just after a fresh page load.
+// with a tiny pub/sub so logIn/logOut are reflected immediately by any
+// mounted useAuthUser() consumer, not just after a fresh page load.
 type Listener = (user: AuthUser | null) => void;
 const listeners = new Set<Listener>();
 
@@ -48,24 +45,23 @@ function storeToken(token: string): void {
   if (typeof window !== 'undefined') localStorage.setItem(TOKEN_KEY, token);
 }
 
-export async function signUp(
+// Magic-link auth: requesting a link doubles as signup (first request for
+// an email creates the account) and login (every later request signs the
+// same account back in) -- there's no separate signup/login distinction to
+// make client-side.
+export async function requestMagicLink(
   email: string,
-  password: string,
   displayName?: string
-): Promise<AuthUser> {
-  const res = await api.post<AuthResponse>('/api/auth/signup', {
-    email,
-    password,
-    display_name: displayName ?? null,
-  });
-  storeToken(res.token);
-  const user = toAuthUser(res.user);
-  broadcast(user);
-  return user;
+): Promise<{ message: string; magicLink: string | null }> {
+  const res = await api.post<{ message: string; magic_link: string | null }>(
+    '/api/auth/request-link',
+    { email, display_name: displayName ?? null }
+  );
+  return { message: res.message, magicLink: res.magic_link };
 }
 
-export async function logIn(email: string, password: string): Promise<AuthUser> {
-  const res = await api.post<AuthResponse>('/api/auth/login', { email, password });
+export async function verifyMagicLink(token: string): Promise<AuthUser> {
+  const res = await api.post<AuthResponse>('/api/auth/verify-link', { token });
   storeToken(res.token);
   const user = toAuthUser(res.user);
   broadcast(user);
@@ -79,36 +75,6 @@ export async function logOut(): Promise<void> {
 
 export async function updateAccount(displayName: string | null): Promise<AuthUser> {
   const res = await api.patch<UserResponse>('/api/auth/me', { display_name: displayName });
-  const user = toAuthUser(res);
-  broadcast(user);
-  return user;
-}
-
-export async function forgotPassword(email: string): Promise<{ message: string; resetLink: string | null }> {
-  const res = await api.post<{ message: string; reset_link: string | null }>(
-    '/api/auth/forgot-password',
-    { email }
-  );
-  return { message: res.message, resetLink: res.reset_link };
-}
-
-export async function resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
-  return api.post<{ message: string }>('/api/auth/reset-password', {
-    token,
-    new_password: newPassword,
-  });
-}
-
-export async function sendVerification(): Promise<{ message: string; verifyLink: string }> {
-  const res = await api.post<{ message: string; verify_link: string }>(
-    '/api/auth/send-verification',
-    {}
-  );
-  return { message: res.message, verifyLink: res.verify_link };
-}
-
-export async function verifyEmail(token: string): Promise<AuthUser> {
-  const res = await api.post<UserResponse>('/api/auth/verify-email', { token });
   const user = toAuthUser(res);
   broadcast(user);
   return user;

@@ -1,11 +1,12 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { verifyEmail } from '@/lib/auth';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { verifyMagicLink } from '@/lib/auth';
 import { AppLogoMarkIcon, CheckCircleIcon } from '@/app/sharedIcons';
 
-function VerifyEmailHandler() {
+function VerifyLinkHandler() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token') ?? '';
   const [status, setStatus] = useState<'pending' | 'success' | 'error'>('pending');
@@ -14,22 +15,25 @@ function VerifyEmailHandler() {
   useEffect(() => {
     if (!token) {
       setStatus('error');
-      setError('This verification link is missing its token.');
+      setError('This sign-in link is missing its token.');
       return;
     }
-    verifyEmail(token)
-      .then(() => setStatus('success'))
+    verifyMagicLink(token)
+      .then(() => {
+        setStatus('success');
+        router.replace(searchParams.get('next') || '/garage');
+      })
       .catch((err) => {
         setStatus('error');
-        setError(err instanceof Error ? err.message : 'Could not verify your email. The link may have expired.');
+        setError(err instanceof Error ? err.message : 'This sign-in link is invalid or has expired.');
       });
-  }, [token]);
+  }, [token, router, searchParams]);
 
   return (
     <main className="page">
       <header className="page-header">
         <div className="logo"><AppLogoMarkIcon size={20} /><span>RAPP</span></div>
-        <h1 className="page-title">Email Verification</h1>
+        <h1 className="page-title">Signing You In</h1>
       </header>
 
       <div className="card" style={{ textAlign: 'center' }}>
@@ -37,11 +41,15 @@ function VerifyEmailHandler() {
         {status === 'success' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
             <CheckCircleIcon size={28} style={{ color: '#4ade80' }} />
-            <p style={{ fontWeight: 700 }}>Your email is verified.</p>
-            <a href="/settings" className="btn btn-primary" style={{ width: 'auto', padding: '0 18px' }}>Go to Settings →</a>
+            <p style={{ fontWeight: 700 }}>Signed in — taking you to your garage…</p>
           </div>
         )}
-        {status === 'error' && <p style={{ color: 'var(--accent-red)' }}>{error}</p>}
+        {status === 'error' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+            <p style={{ color: 'var(--accent-red)' }}>{error}</p>
+            <a href="/signin" className="btn btn-primary" style={{ width: 'auto', padding: '0 18px' }}>Request a new link →</a>
+          </div>
+        )}
       </div>
     </main>
   );
@@ -54,7 +62,7 @@ export default function VerifyEmailPage() {
         <div className="loading-spinner" />
       </main>
     }>
-      <VerifyEmailHandler />
+      <VerifyLinkHandler />
     </Suspense>
   );
 }

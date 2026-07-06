@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { logOut, sendVerification, updateAccount, useAuthUser } from '@/lib/auth';
-import { AppLogoMarkIcon, CheckCircleIcon } from '@/app/sharedIcons';
+import { logOut, updateAccount, useAuthUser } from '@/lib/auth';
+import { AppLogoMarkIcon } from '@/app/sharedIcons';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -12,10 +12,6 @@ export default function SettingsPage() {
   const [savingName, setSavingName] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
-
-  const [verifying, setVerifying] = useState(false);
-  const [verifyLink, setVerifyLink] = useState<string | null>(null);
-  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) router.push('/signin?next=/settings');
@@ -48,19 +44,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSendVerification = async () => {
-    setVerifying(true);
-    setVerifyError(null);
-    try {
-      const res = await sendVerification();
-      setVerifyLink(res.verifyLink);
-    } catch (err) {
-      setVerifyError(err instanceof Error ? err.message : 'Could not generate a verification link.');
-    } finally {
-      setVerifying(false);
-    }
-  };
-
   const handleLogOut = async () => {
     await logOut();
     router.push('/');
@@ -90,13 +73,6 @@ export default function SettingsPage() {
         <p className="text-muted text-sm" style={{ marginBottom: 4 }}>
           Signed in as <strong style={{ color: 'var(--text-primary)' }}>{user.email}</strong>
         </p>
-        <p className="text-muted text-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {user.emailVerified ? (
-            <><CheckCircleIcon size={14} style={{ color: '#4ade80' }} /> Email verified</>
-          ) : (
-            'Email not verified'
-          )}
-        </p>
       </div>
 
       <form className="card" onSubmit={handleSaveName}>
@@ -118,31 +94,6 @@ export default function SettingsPage() {
           </button>
         </div>
       </form>
-
-      {!user.emailVerified && (
-        <div className="card">
-          <p className="card-label">Verify Your Email</p>
-          <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
-            No email provider is configured yet, so verification links are shown here directly instead of emailed.
-          </p>
-          {verifyError && <p style={{ color: 'var(--accent-red)', fontSize: '0.85rem', marginBottom: 10 }}>{verifyError}</p>}
-          {verifyLink ? (
-            <a href={verifyLink} className="btn btn-primary" style={{ width: 'auto', padding: '0 18px' }}>
-              Verify Your Email →
-            </a>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ width: 'auto', padding: '0 18px' }}
-              onClick={handleSendVerification}
-              disabled={verifying}
-            >
-              {verifying ? <><span className="loading-spinner" aria-hidden="true" /> Generating…</> : 'Send Verification Link'}
-            </button>
-          )}
-        </div>
-      )}
 
       <div className="card">
         <p className="card-label">Session</p>

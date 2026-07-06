@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 from backend.core.database import get_db
 from backend.core.models import Base
 from backend.main import app
+from backend.routers import auth as auth_router
 
 
 @pytest.fixture
@@ -27,92 +28,120 @@ def client():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    # The per-email request-link cooldown is process-global state (see
+    # backend/routers/auth.py) and would otherwise leak between tests that
+    # reuse the same address.
+    auth_router._last_request_at.clear()
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.pop(get_db, None)
 
 
-def test_signup_returns_token_and_user(client):
+def _request_and_extract_token(client, email: str) -> str:
+    """No RESEND_API_KEY is set in tests, so request-link always returns the
+    magic link directly (dev-mode) instead of emailing it."""
+    response = client.post("/api/auth/request-link", json={"email": email})
+    assert response.status_code == 200
+    magic_link = response.json()["magic_link"]
+    assert magic_link
+    return magic_link.split("token=")[1]
+
+
+def test_request_link_creates_account_on_first_request(client):
     response = client.post(
-        "/api/auth/signup",
-        json={"email": "New@Example.com", "password": "hunter2", "display_name": "New"},
+        "/api/auth/request-link",
+        json={"email": "New@Example.com", "display_name": "New"},
     )
     assert response.status_code == 200
     data = response.json()
+    assert data["magic_link"]
+    assert "token=" in data["magic_link"]
+
+
+def test_request_link_rejects_invalid_email(client):
+    response = client.post("/api/auth/request-link", json={"email": "not-an-email"})
+    assert response.status_code == 422
+
+
+def test_verify_link_returns_token_and_user(client):
+    token = _request_and_extract_token(client, "verify@example.com")
+    response = client.post("/api/auth/verify-link", json={"token": token})
+    assert response.status_code == 200
+    data = response.json()
     assert data["token"]
-    assert data["user"]["email"] == "new@example.com"
-    assert data["user"]["display_name"] == "New"
-    assert data["user"]["id"]
+    assert data["user"]["email"] == "verify@example.com"
 
 
-def test_signup_requires_email_and_password(client):
-    response = client.post(
-        "/api/auth/signup", json={"email": "", "password": "hunter2"}
-    )
-    assert response.status_code == 422
+def test_verify_link_same_email_reuses_existing_account(client):
+    token1 = _request_and_extract_token(client, "same@example.com")
+    user1 = client.post("/api/auth/verify-link", json={"token": token1}).json()["user"]
 
-    response = client.post(
-        "/api/auth/signup", json={"email": "a@b.com", "password": ""}
-    )
-    assert response.status_code == 422
+    # Bypass the per-email cooldown -- this test wants two *separate*
+    # request-link calls for the same address, not to exercise the
+    # rate-limit itself (see test_request_link_is_rate_limited_per_email).
+    auth_router._last_request_at.clear()
+    token2 = _request_and_extract_token(client, "Same@Example.com")
+    user2 = client.post("/api/auth/verify-link", json={"token": token2}).json()["user"]
+
+    assert user1["id"] == user2["id"]
 
 
-def test_signup_duplicate_email_returns_400(client):
-    payload = {"email": "dupe@example.com", "password": "hunter2"}
-    first = client.post("/api/auth/signup", json=payload)
+def test_request_link_is_rate_limited_per_email(client):
+    first = client.post("/api/auth/request-link", json={"email": "cooldown@example.com"})
     assert first.status_code == 200
 
-    second = client.post("/api/auth/signup", json=payload)
-    assert second.status_code == 400
+    second = client.post("/api/auth/request-link", json={"email": "cooldown@example.com"})
+    assert second.status_code == 429
 
 
-def test_signup_email_is_case_insensitive_for_duplicates(client):
-    client.post("/api/auth/signup", json={"email": "Case@Example.com", "password": "x"})
-    second = client.post(
-        "/api/auth/signup", json={"email": "case@example.com", "password": "y"}
-    )
-    assert second.status_code == 400
+def test_request_link_does_not_leak_link_when_send_fails(client, monkeypatch):
+    # If a real email provider is configured but the send itself fails
+    # (e.g. Resend's sandbox mode rejecting delivery to a non-owner
+    # address), the response must NOT fall back to exposing the magic
+    # link -- that would let anyone sign in as any email they can name.
+    monkeypatch.setattr(auth_router.settings, "resend_api_key", "fake-key-for-test")
 
+    async def _always_fails(to_email, magic_link):
+        return False
 
-def test_login_success(client):
-    client.post(
-        "/api/auth/signup", json={"email": "login@example.com", "password": "hunter2"}
-    )
-    response = client.post(
-        "/api/auth/login",
-        json={"email": "login@example.com", "password": "hunter2"},
-    )
+    monkeypatch.setattr(auth_router, "send_magic_link_email", _always_fails)
+
+    response = client.post("/api/auth/request-link", json={"email": "victim@example.com"})
     assert response.status_code == 200
-    assert response.json()["token"]
+    assert response.json()["magic_link"] is None
 
 
-def test_login_wrong_password_returns_401(client):
-    client.post(
-        "/api/auth/signup", json={"email": "login2@example.com", "password": "hunter2"}
-    )
-    response = client.post(
-        "/api/auth/login",
-        json={"email": "login2@example.com", "password": "wrong"},
-    )
+def test_verify_link_rejects_a_reused_token(client):
+    token = _request_and_extract_token(client, "reuse@example.com")
+    first = client.post("/api/auth/verify-link", json={"token": token})
+    assert first.status_code == 200
+
+    second = client.post("/api/auth/verify-link", json={"token": token})
+    assert second.status_code == 401
+
+
+def test_verify_link_invalid_token_returns_401(client):
+    response = client.post("/api/auth/verify-link", json={"token": "not-a-real-token"})
     assert response.status_code == 401
 
 
-def test_login_unknown_email_returns_401(client):
-    response = client.post(
-        "/api/auth/login",
-        json={"email": "nobody@example.com", "password": "whatever"},
-    )
+def test_verify_link_rejects_an_access_token(client):
+    # Tokens are scoped by a `type` claim -- an access token must not work
+    # as a magic-link-verify token even though both are signed with the
+    # same secret.
+    token = _request_and_extract_token(client, "scoped@example.com")
+    access_token = client.post("/api/auth/verify-link", json={"token": token}).json()["token"]
+
+    response = client.post("/api/auth/verify-link", json={"token": access_token})
     assert response.status_code == 401
 
 
 def test_me_with_valid_token(client):
-    signup = client.post(
-        "/api/auth/signup", json={"email": "me@example.com", "password": "hunter2"}
-    )
-    token = signup.json()["token"]
+    token = _request_and_extract_token(client, "me@example.com")
+    access_token = client.post("/api/auth/verify-link", json={"token": token}).json()["token"]
 
     response = client.get(
-        "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
+        "/api/auth/me", headers={"Authorization": f"Bearer {access_token}"}
     )
     assert response.status_code == 200
     assert response.json()["email"] == "me@example.com"
@@ -133,10 +162,24 @@ def test_me_with_invalid_token_returns_401(client):
     assert response.status_code == 401
 
 
-def test_password_is_hashed_not_stored_in_plaintext():
-    from backend.core.security import get_password_hash, verify_password
+def test_me_rejects_a_verify_token(client):
+    # The inverse of test_verify_link_rejects_an_access_token: a magic-link
+    # token must not work as a session token either.
+    verify_token = _request_and_extract_token(client, "scoped2@example.com")
+    response = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {verify_token}"}
+    )
+    assert response.status_code == 401
 
-    hashed = get_password_hash("hunter2")
-    assert "hunter2" not in hashed
-    assert verify_password("hunter2", hashed) is True
-    assert verify_password("wrong", hashed) is False
+
+def test_update_display_name(client):
+    token = _request_and_extract_token(client, "update@example.com")
+    access_token = client.post("/api/auth/verify-link", json={"token": token}).json()["token"]
+
+    response = client.patch(
+        "/api/auth/me",
+        json={"display_name": "Updated Name"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["display_name"] == "Updated Name"
