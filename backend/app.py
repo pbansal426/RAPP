@@ -5,6 +5,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.core.backup import backup_rapp_db_safe
 from backend.core.config import settings
 from backend.core.database import engine
 from backend.core.exceptions import register_exception_handlers
@@ -22,6 +23,10 @@ async def lifespan(app: FastAPI) -> Any:
         "Starting up FastAPI application", port=settings.port, debug=settings.debug
     )
     Base.metadata.create_all(bind=engine)
+    # Snapshot the irreplaceable rapp.db to the external SSD on every startup (a
+    # routine dev checkpoint). No-ops cleanly when the SSD is unplugged and never
+    # blocks or fails startup.
+    backup_rapp_db_safe()
     yield
     logger.info("Shutting down FastAPI application")
 
