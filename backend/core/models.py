@@ -89,6 +89,36 @@ class DbChatUsage(Base):
     last_message_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
 
+class DbRepairOutcome(Base):
+    """A user-submitted "what actually happened" record for a completed job.
+
+    Powers two things (`imp.md` Stage 2.1/2.2): the aggregation query behind
+    `GET /api/outcomes/stats` (the "214 Corolla owners completed this, avg
+    45 min" social-proof badge on `/results`), and, longer-term, per-vehicle
+    difficulty calibration. `user_id`/`saved_repair_id` are nullable because
+    a completed job can be marked done while logged out -- unlike
+    `DbSavedRepair`, this table's whole purpose is capturing that outcome
+    data even from anonymous single-incident purchasers.
+    """
+
+    __tablename__ = "repair_outcomes"
+
+    id: Mapped[str] = mapped_column(primary_key=True, index=True)  # UUID string
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, default=None
+    )
+    saved_repair_id: Mapped[str | None] = mapped_column(
+        ForeignKey("saved_repairs.id"), nullable=True, default=None
+    )
+    make: Mapped[str] = mapped_column(index=True)
+    model: Mapped[str] = mapped_column(index=True)
+    year: Mapped[str | None] = mapped_column(default=None)
+    category: Mapped[str] = mapped_column(index=True)
+    actual_cost_usd: Mapped[float]
+    actual_duration_minutes: Mapped[int]
+    completed_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+
 class DbGuideUnlock(Base):
     """Server-side proof that a checkout session paid to unlock a VIN's guide.
 

@@ -232,6 +232,48 @@ class SavedRepairResponse(BaseModel):
     saved_at: str | None = None
 
 
+# --- Repair outcomes: post-job "what actually happened" capture, powering
+# the social-proof stats badge on /results (imp.md Stage 2.1/2.2) ---
+
+
+class OutcomeCreateRequest(BaseModel):
+    vin: str
+    make: str
+    model: str
+    year: str | None = None
+    symptoms: str
+    obd_codes: list[str] | str | None = None
+    actual_cost_usd: float
+    actual_duration_minutes: int
+    saved_repair_id: str | None = None
+
+    @field_validator("obd_codes")
+    @classmethod
+    def normalize_obd_codes(cls, v: list[str] | str | None) -> list[str]:
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [v]
+        return v
+
+
+class OutcomeResponse(BaseModel):
+    id: str
+    make: str
+    model: str
+    year: str | None = None
+    category: str
+    actual_cost_usd: float
+    actual_duration_minutes: int
+    completed_at: str
+
+
+class OutcomeStatsResponse(BaseModel):
+    count: int
+    avg_duration_minutes: float | None = None
+    avg_cost_usd: float | None = None
+
+
 # --- Vehicle safety: live NHTSA recalls/complaints lookups (never ingested
 # into the RAG vector store -- see backend/services/nhtsa_safety.py) ---
 

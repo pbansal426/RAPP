@@ -31,9 +31,11 @@ import {
   QualityCheckIcon,
 } from '@/app/sharedIcons';
 import { getComplaintsSummary, getOpenRecalls } from '@/lib/vehicleSafety';
+import { getOutcomeStats } from '@/lib/outcomes';
 import type {
   ComplaintsSummaryResponse,
   DiagnosisResponse,
+  OutcomeStatsResponse,
   RecallsResponse,
   VehicleInfo,
 } from '@/lib/types';
@@ -57,6 +59,7 @@ export default function ResultsPage() {
   const [safetyWarning, setSafetyWarning] = useState<string | null>(null);
   const [recalls, setRecalls] = useState<RecallsResponse | null>(null);
   const [complaintsSummary, setComplaintsSummary] = useState<ComplaintsSummaryResponse | null>(null);
+  const [outcomeStats, setOutcomeStats] = useState<OutcomeStatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [payLoading, setPayLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +147,9 @@ export default function ResultsPage() {
         .catch(() => {});
       getComplaintsSummary(parsedVehicle.year, parsedVehicle.make, parsedVehicle.model)
         .then(setComplaintsSummary)
+        .catch(() => {});
+      getOutcomeStats(String(parsedVehicle.make), String(parsedVehicle.model))
+        .then(setOutcomeStats)
         .catch(() => {});
     }
 
@@ -277,6 +283,74 @@ export default function ResultsPage() {
         >
           <span className="safety-banner-icon" aria-hidden="true"><AlertTriangleIcon size={20} /></span>
           <span>{safetyWarning}</span>
+        </div>
+      )}
+
+      {/* ── Hero savings badge + social proof (Stage 2.1/2.2): the price-gap
+          reveal is the headline element on this page, shown above the
+          diagnosis breakdown so it's the first thing a returning-intent
+          visitor sees. ── */}
+      {diagnosis?.cost_breakdown && (
+        <div
+          data-testid="hero-savings-badge"
+          className="card"
+          style={{
+            textAlign: 'center',
+            background: 'linear-gradient(135deg, rgba(34,197,94,0.12), rgba(15,23,42,0.4))',
+            border: '1px solid rgba(74,222,128,0.35)',
+            padding: '28px 20px',
+          }}
+        >
+          <p className="card-label" style={{ color: '#4ade80', justifyContent: 'center', display: 'flex' }}>
+            Your Potential Savings
+          </p>
+          <div style={{ fontSize: '2.1rem', fontWeight: 900, color: '#4ade80', letterSpacing: '-0.02em' }}>
+            Save ~${Math.max(
+              0,
+              Math.round(
+                (diagnosis.cost_breakdown.dealership_cost_range[0] +
+                  diagnosis.cost_breakdown.dealership_cost_range[1]) /
+                  2 -
+                  diagnosis.cost_breakdown.diy_total
+              )
+            )} vs Dealership
+          </div>
+          <p className="text-muted text-sm" style={{ marginTop: 6 }}>
+            Guided DIY repair with RAPP costs ${diagnosis.cost_breakdown.diy_total.toFixed(2)} vs. an average
+            dealership quote of ${Math.round(
+              (diagnosis.cost_breakdown.dealership_cost_range[0] + diagnosis.cost_breakdown.dealership_cost_range[1]) / 2
+            )}.
+          </p>
+
+          {outcomeStats && outcomeStats.count >= 3 && (
+            <div
+              data-testid="social-proof-badge"
+              style={{
+                marginTop: 16,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: 999,
+                padding: '8px 16px',
+                fontSize: '0.85rem',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              <StarIcon size={14} style={{ color: 'var(--accent-yellow)' }} />
+              <span>
+                <strong style={{ color: '#fff' }}>{outcomeStats.count}</strong> {vinData?.make ?? ''}{' '}
+                {vinData?.model ?? ''} owner{outcomeStats.count === 1 ? '' : 's'} completed this job using RAPP
+                {outcomeStats.avg_duration_minutes != null && (
+                  <> — avg <strong style={{ color: '#fff' }}>{Math.round(outcomeStats.avg_duration_minutes)} min</strong></>
+                )}
+                {outcomeStats.avg_cost_usd != null && (
+                  <> — avg cost <strong style={{ color: '#fff' }}>${outcomeStats.avg_cost_usd.toFixed(0)}</strong></>
+                )}
+              </span>
+            </div>
+          )}
         </div>
       )}
 

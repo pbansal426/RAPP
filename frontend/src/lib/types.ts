@@ -147,3 +147,35 @@ export interface ComplaintsSummaryResponse {
   total_complaints: number;
   top_components: ComplaintComponentFrequency[];
 }
+
+/** POST /api/outcomes request -- "what actually happened" capture on a
+ * completed job, feeding the /results social-proof stats badge. */
+export interface OutcomeCreateRequest {
+  vin: string;
+  make: string;
+  model: string;
+  year?: string | null;
+  symptoms: string;
+  obd_codes?: string[];
+  actual_cost_usd: number;
+  actual_duration_minutes: number;
+  saved_repair_id?: string | null;
+}
+
+export interface OutcomeResponse {
+  id: string;
+  make: string;
+  model: string;
+  year: string | null;
+  category: string;
+  actual_cost_usd: number;
+  actual_duration_minutes: number;
+  completed_at: string;
+}
+
+/** GET /api/outcomes/stats response. */
+export interface OutcomeStatsResponse {
+  count: number;
+  avg_duration_minutes: number | null;
+  avg_cost_usd: number | null;
+}

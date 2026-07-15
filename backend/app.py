@@ -64,6 +64,7 @@ app.include_router(repair.router)
 app.include_router(payments.router)
 app.include_router(auth.router)
 app.include_router(repairs.router)
+app.include_router(repairs.outcomes_router)
 app.include_router(vehicle_safety.router)
 
 
