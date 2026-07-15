@@ -163,14 +163,14 @@ To guarantee that RAPP feels like a **world-class, high-trust, $100M+ automotive
     - ⭐ **Annual Pass ($19.99/yr) [RECOMMENDED]**: Unlimited verified guides, persistent garage storage, and recall alerts.
     - **Single Job Unlock ($4.99 / $9.99 / $14.99)**: One-time guide for the current diagnosis, dynamically anchored to the dealer quote comparison (`"Save ~$415 vs Dealership"`).
 
-#### 1.5 Safety-Flagged Redirect in Repair Guides (Claude Code, Opus)
+#### 1.5 [x] Safety-Flagged Redirect in Repair Guides (Claude Code, Opus)
 - **Problem**: Safety categories (`airbag_srs`, `high_voltage_battery`, `pressurized_fuel_line`) are flagged on diagnosis (`DiagnoseResponse.is_high_risk = True` in `backend/routers/diagnose.py`) but must block detailed step-by-step repair guide generation to prevent liability and physical injury.
 - **Implementation**:
   - Update `POST /api/repair` (`backend/routers/repair.py`) to verify the safety category of `request.symptoms` / retrieved TSBs.
   - If high-risk systems are detected (`airbag`, `SRS`, `high voltage`, `hybrid battery`, `pressurized fuel`), **abort step generation** (`call_gemini_repair_steps` is bypassed) and return HTTP 403 or a structured `RepairResponse` with `is_blocked_safety=True`.
   - Update `frontend/src/app/repair/page.tsx` to intercept this flag and render a prominent red **"Professional Service Required"** screen containing specific safety warnings and certified local shop lookup links (`RepairPal` / `Google Maps` shop queries) instead of interactive steps.
 
-#### 1.6 Liability Disclaimer & Terms of Service (Claude Code, Sonnet)
+#### 1.6 [x] Liability Disclaimer & Terms of Service (Claude Code, Sonnet)
 - **Implementation**:
   - Create `/terms` and `/privacy` routes on the frontend (`frontend/src/app/terms/page.tsx`).
   - Add a mandatory `[x] I agree to the Terms of Service and understand that automotive repair involves inherent physical and financial risk` checkbox above both the Annual Pass and Single Job checkout CTAs on `frontend/src/app/results/page.tsx`. Disable checkout buttons until checked.
@@ -231,7 +231,7 @@ To guarantee that RAPP feels like a **world-class, high-trust, $100M+ automotive
     - 🔴 **Red (Bail-Out / Professional Recommended)**: Tool gap or job complexity exceeds comfort. Offer instant "Find Local Shop" links.
   - **Inline Bail-Out Frames**: In `backend/services/gemini.py:call_gemini_repair_steps`, update system prompt to inject an explicit **[POINT OF NO RETURN]** warning step before the step where critical disassembly occurs (e.g., *“Before removing the intake manifold bolts, verify you have new replacement gaskets on hand. If you cannot complete reassembly today, do not proceed past this step.”*).
 
-#### 2.4 Photo Checkpoints Mid-Repair (Claude Code, Sonnet)
+#### 2.4 [ ] Photo Checkpoints Mid-Repair (Claude Code, Sonnet)
 - **Goal**: Confirm physical work milestones before unlocking subsequent phases using our verified `_normalize_image_for_vision` pipeline (`backend/routers/vin.py:L392`).
 - **Implementation**:
   - Create endpoint `POST /api/repair/checkpoint/verify` in `backend/routers/repair.py` accepting `file: UploadFile` and `step_description: str`.
@@ -245,7 +245,7 @@ To guarantee that RAPP feels like a **world-class, high-trust, $100M+ automotive
     ```
   - On `frontend/src/app/repair/page.tsx`, display a **📸 Verify Milestone** camera button at major phase transitions (e.g., Phase 2 -> Phase 3). When uploaded, render Gemini's verification badge (`✅ Correct part removed / belt aligned` or `⚠️ Double-check seating before torquing`).
 
-#### 2.5 Skill Leveling & Persistent Competence Tracking (Antigravity, Gemini Pro)
+#### 2.5 [ ] Skill Leveling & Persistent Competence Tracking (Antigravity, Gemini Pro)
 - **Goal**: Persistent competence tracking across jobs per North Star Section 4; giving RAPP memory across sessions that stateless ChatGPT cannot match.
 - **Implementation**:
   - **Database Schema**: Add columns to `DbUser` (`backend/core/models.py`):
@@ -259,7 +259,7 @@ To guarantee that RAPP feels like a **world-class, high-trust, $100M+ automotive
     - For `Beginner`: Include detailed tool explanations, righty-tighty reminders, and connector release tips.
     - For `Advanced`: Keep steps concise, focusing strictly on torque specs, sequence orders, and TSB gotchas.
 
-#### 2.6 "Check My ChatGPT Answer" Verification Funnel (Antigravity, Gemini Pro)
+#### 2.6 [ ] "Check My ChatGPT Answer" Verification Funnel (Antigravity, Gemini Pro)
 - **Goal**: Turn user skepticism and competing AI chatbots into an acquisition wedge by verifying external AI outputs against real fitment and OEM TSB data per Section 4.
 - **Implementation**:
   - Create endpoint `POST /api/diagnose/verify-external` (`backend/routers/diagnose.py`) accepting `vin: str`, `symptoms: str`, and `external_ai_text: str`.
@@ -279,14 +279,14 @@ To guarantee that RAPP feels like a **world-class, high-trust, $100M+ automotive
 
 ### Stage 3: Content, Retention, & Growth (Parallelizable across Worktrees)
 
-#### 3.1 Maintenance Content (Jules)
+#### 3.1 [ ] Maintenance Content (Jules)
 - **Goal**: Add wiper changes, fluid top-offs, oil changes, bulb replacements, and tire pressure adjustments.
 - **Implementation**: Write deterministic step templates in `backend/repair_templates.py` to support high-frequency usage categories without requiring per-request RAG LLM compute.
 
-#### 3.2 Knowledge Hub (Antigravity, Gemini Flash)
+#### 3.2 [ ] Knowledge Hub (Antigravity, Gemini Flash)
 - **Implementation**: Create `/hub` section hosting curated markdown articles, guides, and embeds for common car troubleshooting tips (`frontend/src/app/hub/page.tsx`).
 
-#### 3.3 Referral Program & Recall Alerts (Jules)
+#### 3.3 [ ] Referral Program & Recall Alerts (Jules)
 - **Implementation**:
   - Create referral codes (`DbUser.referral_code`); give $3.99 single-job credits or free guide unlocks for referred signups (`backend/routers/auth.py`).
   - Set up a daily async cron task (`backend/scripts/recall_watch_cron.py`) that queries NHTSA's live recall API (`backend/services/nhtsa_safety.py`) against all `DbSavedRepair.vin` records and sends automated alert emails via Resend to users when new safety recalls drop.
@@ -295,7 +295,7 @@ To guarantee that RAPP feels like a **world-class, high-trust, $100M+ automotive
 
 ### Stage 4: Go-To-Market Vector Database Scale-Up
 
-#### 4.1 20-Vehicle Batch Ingestion Pilot & Python Runtime Modernization (Jules)
+#### 4.1 [ ] 20-Vehicle Batch Ingestion Pilot & Python Runtime Modernization (Jules)
 - **Goal**: Ingest technical manual data across 20 vehicle makes/models into our `chroma_db` vector store and upgrade the Python runtime before the heavy compute load.
 - **Implementation & Architectural Fixes**:
   - **Python `<3.12` Version Lock (Fix)**: In `pyproject.toml`, upgrade `requires-python` from `">=3.11,<3.12"` to `">=3.12"`. Early `chromadb` C++ wheel conflicts on Python 3.12 have been resolved in modern versions, unlocking a free 15-25% runtime speed boost and memory optimization for our RAG workload.
