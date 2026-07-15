@@ -681,6 +681,94 @@ export default function RepairPage() {
                           </div>
                         )}
 
+                        <div style={{ width: '100%' }}>
+                          <input
+                            ref={(el) => { checkpointFileRefs.current[i] = el; }}
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                verifyCheckpoint(i, stepText, file);
+                              }
+                              e.target.value = '';
+                            }}
+                          />
+
+                          {(!checkpointStates[i] || checkpointStates[i]?.status === 'idle') && (
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                minHeight: '48px',
+                                padding: '8px 16px',
+                                fontSize: '0.85rem',
+                              }}
+                              onClick={() => checkpointFileRefs.current[i]?.click()}
+                            >
+                              <CameraIcon size={16} /> Verify My Work
+                            </button>
+                          )}
+
+                          {checkpointStates[i]?.status === 'verifying' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 0' }}>
+                              <span className="loading-spinner" style={{ width: 16, height: 16 }} />
+                              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                Verifying your work with AI...
+                              </span>
+                            </div>
+                          )}
+
+                          {checkpointStates[i]?.status === 'done' && (() => {
+                            const result = (checkpointStates[i] as { status: 'done'; result: CheckpointResult }).result;
+                            const isGood = result.is_milestone_met;
+                            return (
+                              <div style={{
+                                marginTop: '8px',
+                                padding: '10px 14px',
+                                borderRadius: '999px',
+                                fontSize: '0.85rem',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '8px',
+                                background: isGood ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                                border: `1px solid ${isGood ? 'rgba(16, 185, 129, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`,
+                                color: isGood ? '#10B981' : '#F59E0B',
+                              }}>
+                                <span>{isGood ? '✅' : '⚠️'}</span>
+                                <span style={{ color: 'var(--text-primary)' }}>{result.explanation}</span>
+                              </div>
+                            );
+                          })()}
+
+                          {checkpointStates[i]?.status === 'error' && (
+                            <div style={{
+                              marginTop: '8px',
+                              padding: '10px 14px',
+                              borderRadius: '999px',
+                              fontSize: '0.85rem',
+                              background: 'rgba(239, 68, 68, 0.12)',
+                              border: '1px solid rgba(239, 68, 68, 0.4)',
+                              color: '#EF4444',
+                            }}>
+                              {(checkpointStates[i] as { status: 'error'; message: string }).message}
+                              {' '}
+                              <button
+                                type="button"
+                                onClick={() => setCheckpoint(i, { status: 'idle' })}
+                                style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', color: 'inherit', fontSize: 'inherit', minHeight: '48px' }}
+                              >
+                                Try again
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
                         {i === layoutStepIndex && <LayoutDiagram />}
                         {i === wiringStepIndex && <WiringDiagram />}
                       </li>
