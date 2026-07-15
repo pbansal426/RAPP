@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str | None = None
     stripe_price_single: str = "price_xxx"
     stripe_price_vin_pass: str = "price_xxx"
+
+    # Polar Merchant of Record (MoR) Settings
+    polar_access_token: str | None = None
+    polar_webhook_secret: str | None = None
+    polar_product_id_tier_1: str = "prod_tier1"
+    polar_product_id_tier_2: str = "prod_tier2"
+    polar_product_id_tier_3: str = "prod_tier3"
+    polar_product_id_annual: str = "prod_annual"
     # Amazon Associates tracking ID (e.g. "rapp-20"). Unset by default -- see
     # backend/pricing.py's _search_url(), which only appends the `tag` param
     # when this is configured. Purely additive revenue: doesn't touch

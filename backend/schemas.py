@@ -76,6 +76,7 @@ class CostBreakdown(BaseModel):
     dealership_cost_range: list[float]
     independent_shop_range: list[float]
     parts_total: float
+    guide_fee: float
     diy_total: float
     estimated_labor_hours: float
 
@@ -188,6 +189,7 @@ class UserResponse(BaseModel):
     id: str
     email: str
     display_name: str | None = None
+    subscription_status: str = "free"
 
 
 class AuthResponse(BaseModel):

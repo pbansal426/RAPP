@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AssistantIcon } from '@/app/sharedIcons';
 import { api } from '@/lib/api';
+import { useAuthUser } from '@/lib/auth';
 import type { RepairChatRequest, RepairChatResponse, VehicleInfo } from '@/lib/types';
 
 interface ChatPanelProps {
@@ -71,7 +72,11 @@ export default function ChatPanel({ vin, vinData, symptoms, repairSteps }: ChatP
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [sending, setSending] = useState(false);
+  const [aiLimitReached, setAiLimitReached] = useState(false);
   const userHasRepliedRef = useRef(false);
+
+
+  const { user: authUser } = useAuthUser();
 
   // Recompute the opening message as vinData/symptoms arrive from the parent's
   // async load, but stop touching it once the user has joined the conversation.
@@ -89,8 +94,9 @@ export default function ChatPanel({ vin, vinData, symptoms, repairSteps }: ChatP
     setSending(true);
 
     const stripeSessionId = localStorage.getItem(`rapp_unlocked_${vin}`) ?? '';
+    const isSubscriber = authUser?.subscriptionStatus === 'active';
     const canUseAi =
-      stripeSessionId && repairSteps.length > 0 && getChatCount(vin) < MAX_AI_REPLIES_PER_VEHICLE;
+      (stripeSessionId || isSubscriber) && repairSteps.length > 0 && !aiLimitReached && getChatCount(vin) < MAX_AI_REPLIES_PER_VEHICLE;
 
     let reply: string | null = null;
     if (canUseAi) {
@@ -106,10 +112,14 @@ export default function ChatPanel({ vin, vinData, symptoms, repairSteps }: ChatP
         const res = await api.post<RepairChatResponse>('/api/repair/chat', body);
         reply = res.reply;
         if (reply) incrementChatCount(vin);
-      } catch {
+      } catch (err: unknown) {
         reply = null;
+        if (typeof err === 'object' && err !== null && 'status' in err && (err as { status: number }).status === 429) {
+          setAiLimitReached(true);
+        }
       }
     }
+
 
     setMessages((prev) => [...prev, { sender: 'bot', text: reply ?? cannedReply(userMsg) }]);
     setSending(false);
@@ -133,7 +143,13 @@ export default function ChatPanel({ vin, vinData, symptoms, repairSteps }: ChatP
             {m.text}
           </div>
         ))}
+        {aiLimitReached && (
+          <div className="alert alert-warning" style={{ margin: '8px 12px', fontSize: '0.85rem', padding: '8px 12px', borderRadius: 6, backgroundColor: '#fff3cd', color: '#664d03', border: '1px solid #ffecb5' }}>
+            ⚠️ <strong>Live AI quota reached for this job (5/5).</strong> Further questions are answered using local high-speed OEM torque, tool, and safety specification lookups.
+          </div>
+        )}
       </div>
+
 
       <div className="repair-chat-input-row">
         <input

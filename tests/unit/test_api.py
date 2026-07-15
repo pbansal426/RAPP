@@ -484,11 +484,10 @@ def test_success_stub(client):
     assert response.status_code == 303
     assert response.headers["location"] == f"{settings.frontend_url}/repair/success?session_id=cs_test_123&vin=1HGBH41JXMN109186"
 
-def test_payments_webhook_returns_503_when_unconfigured(client):
-    # STRIPE_WEBHOOK_SECRET is unset in the test environment -- the real
-    # endpoint correctly refuses to even attempt signature verification.
+def test_payments_webhook_returns_410_when_deprecated(client):
+    # Stripe webhook is deprecated and always returns 410.
     response = client.post("/api/webhooks/stripe")
-    assert response.status_code == 503
+    assert response.status_code == 410
 
 
 def test_synthetic_vin_decoding_success(client):
@@ -557,7 +556,7 @@ def test_diagnose_includes_recommended_parts_and_cost_breakdown(client):
 
     breakdown = data["cost_breakdown"]
     assert breakdown["parts_total"] > 0
-    assert breakdown["diy_total"] == round(4.00 + breakdown["parts_total"], 2)
+    assert breakdown["diy_total"] == round(breakdown["guide_fee"] + breakdown["parts_total"], 2)
     assert breakdown["dealership_cost_range"][0] > breakdown["independent_shop_range"][0]
 
 
@@ -573,7 +572,7 @@ def test_diagnose_no_template_match_has_empty_parts(client):
     data = response.json()
     assert data["recommended_parts"] == []
     assert data["cost_breakdown"]["parts_total"] == 0.0
-    assert data["cost_breakdown"]["diy_total"] == 4.00
+    assert data["cost_breakdown"]["diy_total"] == data["cost_breakdown"]["guide_fee"]
 
 
 @patch("backend.rag.retriever.retrieve")
@@ -729,33 +728,45 @@ def test_repair_chat_requires_payment(client):
 
 
 def test_repair_chat_grounded_reply(client, monkeypatch):
+    from backend.core.database import SessionLocal
+    from backend.core.models import DbChatUsage
+
     monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+
+    with SessionLocal() as db:
+        db.query(DbChatUsage).filter(DbChatUsage.stripe_session_id == "cs_test_123").delete()
+        db.commit()
 
     mock_response = MagicMock()
     mock_response.text = "Use a 14mm socket, per the procedure above."
     mock_generate_content = AsyncMock(return_value=mock_response)
 
-    with patch("backend.services.gemini.get_genai_client") as mock_get_client:
-        mock_client = MagicMock()
-        mock_client.aio.models.generate_content = mock_generate_content
-        mock_get_client.return_value = mock_client
+    try:
+        with patch("backend.services.gemini.get_genai_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.aio.models.generate_content = mock_generate_content
+            mock_get_client.return_value = mock_client
 
-        payload = {
-            "vin": "1HGBH41JXMN109186",
-            "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
-            "symptoms": "squeaking brakes",
-            "repair_steps": ["Use a 14mm socket to remove the caliper slide pin bolts."],
-            "message": "what socket do I need?",
-            "stripe_session_id": "cs_test_123",
-        }
-        response = client.post("/api/repair/chat", json=payload)
+            payload = {
+                "vin": "1HGBH41JXMN109186",
+                "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
+                "symptoms": "squeaking brakes",
+                "repair_steps": ["Use a 14mm socket to remove the caliper slide pin bolts."],
+                "message": "what socket do I need?",
+                "stripe_session_id": "cs_test_123",
+            }
+            response = client.post("/api/repair/chat", json=payload)
 
-    assert response.status_code == 200
-    assert response.json()["reply"] == "Use a 14mm socket, per the procedure above."
-    mock_generate_content.assert_called_once()
-    config = mock_generate_content.call_args.kwargs["config"]
-    assert "ONLY using the repair procedure" in config.system_instruction
-    assert "14mm socket" in mock_generate_content.call_args.kwargs["contents"]
+        assert response.status_code == 200
+        assert response.json()["reply"] == "Use a 14mm socket, per the procedure above."
+        mock_generate_content.assert_called_once()
+        config = mock_generate_content.call_args.kwargs["config"]
+        assert "ONLY using the repair procedure" in config.system_instruction
+        assert "14mm socket" in mock_generate_content.call_args.kwargs["contents"]
+    finally:
+        with SessionLocal() as db:
+            db.query(DbChatUsage).filter(DbChatUsage.stripe_session_id == "cs_test_123").delete()
+            db.commit()
 
 
 def test_repair_chat_no_key_returns_none_reply(client, monkeypatch):
@@ -767,9 +778,56 @@ def test_repair_chat_no_key_returns_none_reply(client, monkeypatch):
         "symptoms": "squeaking brakes",
         "repair_steps": ["Torque the caliper bolts to 25 ft-lbs."],
         "message": "what socket do I need?",
-        "stripe_session_id": "cs_test_123",
+        "stripe_session_id": "cs_test_no_key",
     }
     response = client.post("/api/repair/chat", json=payload)
     assert response.status_code == 200
     assert response.json()["reply"] is None
+
+
+def test_repair_chat_rate_limit_exceeded(client, monkeypatch):
+    """Verify that calling POST /api/repair/chat 6 times returns HTTP 429 on the 6th call."""
+    from backend.core.database import SessionLocal
+    from backend.core.models import DbChatUsage
+
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+
+    mock_response = MagicMock()
+    mock_response.text = "Grounded AI answer."
+    mock_generate_content = AsyncMock(return_value=mock_response)
+
+    with SessionLocal() as db:
+        db.query(DbChatUsage).filter(DbChatUsage.stripe_session_id == "cs_test_rate_limit_session").delete()
+        db.commit()
+
+    try:
+        with patch("backend.services.gemini.get_genai_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.aio.models.generate_content = mock_generate_content
+            mock_get_client.return_value = mock_client
+
+            payload = {
+                "vin": "1HGBH41JXMN109186",
+                "vehicle": {"year": 2010, "make": "Toyota", "model": "Corolla"},
+                "symptoms": "squeaking brakes",
+                "repair_steps": ["Step 1"],
+                "message": "socket size?",
+                "stripe_session_id": "cs_test_rate_limit_session",
+            }
+
+            for i in range(5):
+                response = client.post("/api/repair/chat", json=payload)
+                assert response.status_code == 200, f"Call {i+1} failed"
+                assert response.json()["reply"] == "Grounded AI answer."
+
+            response_exceeded = client.post("/api/repair/chat", json=payload)
+            assert response_exceeded.status_code == 429
+            assert "limit" in response_exceeded.json()["error"].lower()
+    finally:
+        with SessionLocal() as db:
+            db.query(DbChatUsage).filter(DbChatUsage.stripe_session_id == "cs_test_rate_limit_session").delete()
+            db.commit()
+
+
+
 

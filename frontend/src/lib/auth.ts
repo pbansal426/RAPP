@@ -9,12 +9,14 @@ export interface AuthUser {
   uid: string;
   email: string;
   displayName: string | null;
+  subscriptionStatus: string;
 }
 
 interface UserResponse {
   id: string;
   email: string;
   display_name: string | null;
+  subscription_status: string;
 }
 
 interface AuthResponse {
@@ -27,6 +29,7 @@ function toAuthUser(user: UserResponse): AuthUser {
     uid: user.id,
     email: user.email,
     displayName: user.display_name,
+    subscriptionStatus: user.subscription_status || 'free',
   };
 }
 

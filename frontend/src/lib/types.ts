@@ -65,7 +65,7 @@ export interface CostBreakdown {
   /** [min, max] */
   independent_shop_range: [number, number];
   parts_total: number;
-  /** RAPP guide fee ($4.00) + parts_total */
+  guide_fee: number;
   diy_total: number;
   estimated_labor_hours: number;
 }

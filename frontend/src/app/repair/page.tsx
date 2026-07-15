@@ -46,7 +46,7 @@ export default function RepairPage() {
   const [savePromptDismissed, setSavePromptDismissed] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const conclusionRef = useRef<HTMLDivElement>(null);
-  const { user: authUser } = useAuthUser();
+  const { user: authUser, loading: authLoading } = useAuthUser();
 
   const generateAndCache = (
     storedVin: string,
@@ -73,12 +73,15 @@ export default function RepairPage() {
   };
 
   useEffect(() => {
+    if (authLoading) return;
+
     const storedVin = localStorage.getItem('rapp_vin');
     if (!storedVin) { router.push('/'); return; }
     setVin(storedVin);
 
     const sessionId = localStorage.getItem(`rapp_unlocked_${storedVin}`);
-    if (!sessionId) { router.push('/results'); return; }
+    const isSubscriber = authUser?.subscriptionStatus === 'active';
+    if (!sessionId && !isSubscriber) { router.push('/results'); return; }
     setUnlocked(true);
 
     const storedVinData = localStorage.getItem('rapp_vin_data');
@@ -110,8 +113,8 @@ export default function RepairPage() {
       }
     }
 
-    generateAndCache(storedVin, storedSymptoms, tools, sessionId, parsedVinData);
-  }, [router]);
+    generateAndCache(storedVin, storedSymptoms, tools, sessionId || '', parsedVinData);
+  }, [router, authUser, authLoading]);
 
   const startOver = () => {
     if (!vin) return;
