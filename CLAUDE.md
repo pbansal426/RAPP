@@ -8,19 +8,25 @@ RAPP — Automotive AI Repair Engine. Converts VIN + symptoms/OBD-II codes into 
 
 ## 🤖 MANDATORY AI AGENT PROTOCOL (EXECUTION & LOGGING)
 
-Every AI agent (Claude Code, Antigravity, Jules, or general Gemini instances) working in this repository **MUST strictly adhere to this 3-step operational protocol**:
+Every AI agent (Claude Code, Antigravity, Jules, or general Gemini instances) working in this repository **MUST strictly adhere to this 4-step operational protocol**:
 
-1. **Step 1: Session Initialization (Read-First Rule)**
-   - Before writing or modifying any code, read [`docs/implementation/imp.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/imp.md) to identify the active implementation stage and priority items.
-   - You MUST work **strictly within the active phase/stage**. Do not jump to Stage 2 or Stage 3 tasks if Stage 1 items are pending or unverified.
-   - Check existing architectural boundaries in `CLAUDE.md` (`## Architecture` and `## Pinned contract`).
+1. **Step 1: Session Initialization (Read-First & Workspace Check)**
+   - Run `git status` to verify you are starting with a clean working tree. If there are uncommitted discrepancies from a prior agent, resolve or stash them before beginning your block.
+   - Before writing or modifying any code, read [`docs/implementation/imp.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/imp.md) to identify the active implementation block and priority items.
+   - You MUST work **strictly within the active phase/block**. Do not jump to Stage 2 or Stage 3 tasks if Stage 1 items are pending or unverified.
+   - Check existing architectural boundaries in `CLAUDE.md`.
 
 2. **Step 2: Strict Plan Adherence & Zero Silent Drift**
    - Follow the step-by-step specifications defined in [`docs/implementation/imp.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/imp.md).
    - If you discover a technical blocker, scope issue, or reason why a planned task cannot/should not be executed as written, **DO NOT silently skip, downgrade, or alter the feature**. Instead, stop, explain the trade-off clearly to the user, and use the `/log-decision` workflow (see [`docs/UPDATED_PRODUCT_NORTH_STAR.md`](file:///Users/prathambansal/dev/rapp/docs/UPDATED_PRODUCT_NORTH_STAR.md) Section 12) to formally document the pivot.
 
-3. **Step 3: Session Termination & Document Updates**
-   - At the conclusion of your turn or when finishing any **Master Task Block**, you **MUST** update all core tracking documents:
+3. **Step 3: Quality Control & Mandatory Git Commits**
+   - Before claiming a task is done, run the backend/frontend linters and type-checkers (e.g., `uv run ruff check backend/`, `uv run mypy backend/`). Do not commit broken code.
+   - Run `git diff` to review your own changes. Revert any accidental edits to files unrelated to your Task Block.
+   - **Mandatory Commit**: You must stage your verified files and commit your work using conventional commit formatting referencing the Block. Example: `git commit -m "feat(payments): Block 1 MoR Swap and Tiered Pricing"`. Never leave a completed block uncommitted.
+
+4. **Step 4: Session Termination & Document Updates**
+   - At the conclusion of your turn or when finishing any **Master Task Block**, you **MUST** update all core tracking documents in a separate follow-up commit (e.g., `git commit -m "docs: update tracking for Block 1"`):
      - **`docs/implementation/imp.md`**: Check off completed tasks (`[x]`), update the progress percentage table, and append a new entry to **Section 6: Active Execution Log & AI Session Audit Trail** documenting: date/timestamp, your agent model (`Claude Opus 5`, `Sonnet`, etc.), exact files changed, tests executed/results, and precise handoff status for the next block.
      - **`docs/UPDATED_PRODUCT_NORTH_STAR.md`**: If any structural decision or pricing/schema change occurred during the block, append it to **Section 12: Architectural & Product Decision Log** per the `/log-decision` workflow.
      - **`docs/MODEL_ASSIGNMENT_GUIDE.md`**: Mark the completed Task Block (`Block 1`, `Block 2`, etc.) as ✅ **COMPLETED** in the Master Cheat Sheet table so the human owner always knows exactly which blocks remain.
