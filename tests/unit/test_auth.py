@@ -111,6 +111,22 @@ def test_request_link_does_not_leak_link_when_send_fails(client, monkeypatch):
     assert response.json()["magic_link"] is None
 
 
+def test_request_link_never_leaks_link_in_production_even_without_resend_key(
+    client, monkeypatch
+):
+    # Belt-and-suspenders: Settings' model_validator already refuses to
+    # start a staging/production process without RESEND_API_KEY set (see
+    # test_config.py), but request_link() itself must independently refuse
+    # to leak the link outside development/test even if that startup check
+    # were somehow bypassed -- e.g. resend_api_key patched away at runtime.
+    monkeypatch.setattr(auth_router.settings, "environment", "production")
+    monkeypatch.setattr(auth_router.settings, "resend_api_key", None)
+
+    response = client.post("/api/auth/request-link", json={"email": "prod@example.com"})
+    assert response.status_code == 200
+    assert response.json()["magic_link"] is None
+
+
 def test_verify_link_rejects_a_reused_token(client):
     token = _request_and_extract_token(client, "reuse@example.com")
     first = client.post("/api/auth/verify-link", json={"token": token})

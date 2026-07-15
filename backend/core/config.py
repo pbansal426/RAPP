@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # pydantic-settings parses .env into the Settings object below, but doesn't
@@ -6,6 +7,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # GEMINI_API_KEY from the environment automatically (per google-genai's own
 # convention), so we load .env into the process environment explicitly.
 load_dotenv()
+
+# Environments where magic-link auth must actually deliver email rather than
+# falling back to handing the link back in the API response -- see
+# backend/routers/auth.py's request_link() and Settings._require_resend_key_outside_dev
+# below.
+EMAIL_REQUIRED_ENVIRONMENTS = frozenset({"staging", "production"})
 
 
 class Settings(BaseSettings):
@@ -20,9 +27,12 @@ class Settings(BaseSettings):
     port: int = 8000
     host: str = "127.0.0.1"
 
-    # Environment: "development" (default), "test", or "production". Used to
-    # force mock VectorStore/Gemini behavior so CI/test runs never dial out
-    # over the network, regardless of what secrets happen to be present.
+    # Environment: "development" (default), "test", "staging", or
+    # "production". Used to force mock VectorStore/Gemini behavior so
+    # CI/test runs never dial out over the network, regardless of what
+    # secrets happen to be present -- and (see the model_validator below)
+    # to require real email delivery to be configured before a
+    # staging/production process is allowed to start at all.
     environment: str = "development"
 
     # API endpoints and URLs
@@ -77,6 +87,16 @@ class Settings(BaseSettings):
     # always set a real secret via the environment in any deployed environment.
     database_url: str | None = None
     jwt_secret_key: str = "supersecretkeyforlocaldev"
+
+    @model_validator(mode="after")
+    def _require_resend_key_outside_dev(self) -> "Settings":
+        if self.environment in EMAIL_REQUIRED_ENVIRONMENTS and not self.resend_api_key:
+            raise ValueError(
+                f"RESEND_API_KEY must be set when ENVIRONMENT={self.environment!r} -- "
+                "magic-link auth is not allowed to fall back to leaking the sign-in "
+                "link in the API response outside development/test."
+            )
+        return self
 
     @property
     def is_test_mode(self) -> bool:

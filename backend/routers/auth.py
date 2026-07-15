@@ -9,7 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.core.config import settings
+from backend.core.config import EMAIL_REQUIRED_ENVIRONMENTS, settings
 from backend.core.database import get_db
 from backend.core.models import DbUser, UsedVerifyToken
 from backend.core.security import create_access_token, create_verify_token, decode_token
@@ -113,14 +113,23 @@ async def request_link(
     magic_link = f"{settings.frontend_url}/verify-email?token={token}"
 
     # Dev-mode fallback (returning the link in the response) is ONLY safe
-    # when no email provider is configured at all. If RESEND_API_KEY *is*
-    # set but a real send still fails -- e.g. Resend's sandbox mode only
-    # delivers to the account's own email until a domain is verified, so
-    # every other address 4xxs -- that must NOT fall through to leaking the
-    # link back to the caller. Anyone could otherwise submit a victim's
-    # email and get their live sign-in link handed back directly. A real
-    # send failure just gets logged for an operator to notice.
-    if not settings.resend_api_key:
+    # when no email provider is configured at all, AND we're not in a
+    # staging/production environment -- Settings' model_validator already
+    # refuses to start a staging/production process without RESEND_API_KEY
+    # set, but this environment check is a second, independent guard so a
+    # misconfigured deploy fails closed (never send the link back) rather
+    # than fails open, even if that startup check were ever bypassed. If
+    # RESEND_API_KEY *is* set but a real send still fails -- e.g. Resend's
+    # sandbox mode only delivers to the account's own email until a domain
+    # is verified, so every other address 4xxs -- that must NOT fall
+    # through to leaking the link back to the caller either. Anyone could
+    # otherwise submit a victim's email and get their live sign-in link
+    # handed back directly. A real send failure just gets logged for an
+    # operator to notice.
+    if (
+        settings.environment not in EMAIL_REQUIRED_ENVIRONMENTS
+        and not settings.resend_api_key
+    ):
         return RequestLinkResponse(
             message="Dev mode: no email provider configured, use the link below.",
             magic_link=magic_link,
