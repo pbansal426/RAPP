@@ -90,8 +90,8 @@ To guarantee that RAPP feels like a **world-class, high-trust, $100M+ automotive
 
 | **[x] Task Block 1: MoR Swap & Tiered Single Pricing** | Payments & Tax Compliance | §3, §7 Stage 1 #3 | ✅ **COMPLETED (Combined Block 1)** |
 | **[x] Task Block 1: Annual Pass Subscription ($15-20/yr)** | Primary Monetization | §3, §7 Stage 1 #3.5 | ✅ **COMPLETED (Combined Block 1)** |
-| **Safety Redirect on SRS/HV/Fuel** | Safety & Liability | §7, Stage 1 #4 | 🔴 **Blocks Launch** |
-| **Liability Disclaimer & Terms of Service** | Legal & Compliance | §7, Stage 1 #5 | 🔴 **Blocks Launch** |
+| **[x] Task Block 2: Safety Redirect on SRS/HV/Fuel** | Safety & Liability | §7, Stage 1 #4 | ✅ **COMPLETED (Combined Block 2)** |
+| **[x] Task Block 2: Liability Disclaimer & Terms of Service** | Legal & Compliance | §7, Stage 1 #5 | ✅ **COMPLETED (Combined Block 2)** |
 | **Results Hero Redesign & Outcome Survey** | Trust Architecture & Data Moat | §5, §7 Stage 2 #6 | 🟠 Core Differentiator |
 | **Social Proof Aggregation Query & Badge**| Trust Architecture & UX | §4, §5 Stage 2 #6 | 🟠 Core Differentiator |
 | **Readiness Check (Green/Yellow/Red)** | Safety & UX | §4, §7 Stage 2 #7 | 🟠 Core Differentiator |
