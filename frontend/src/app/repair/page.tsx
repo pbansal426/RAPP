@@ -10,6 +10,7 @@ import ConclusionPhase from './ConclusionPhase';
 import SaveGuidePrompt from './SaveGuidePrompt';
 import { useAuthUser } from '@/lib/auth';
 import { completePendingSave } from '@/lib/pendingSave';
+import { submitOutcome } from '@/lib/outcomes';
 import type { RecommendedPart, VehicleInfo } from '@/lib/types';
 import {
   AppLogoMarkIcon,
@@ -48,6 +49,12 @@ export default function RepairPage() {
   const [showSavePrompt, setShowSavePrompt] = useState(false);
   const [savePromptDismissed, setSavePromptDismissed] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  const [showCompletionSurvey, setShowCompletionSurvey] = useState(false);
+  const [outcomeSubmitted, setOutcomeSubmitted] = useState(false);
+  const [outcomeDuration, setOutcomeDuration] = useState('');
+  const [outcomeCost, setOutcomeCost] = useState('');
+  const [outcomeSubmitting, setOutcomeSubmitting] = useState(false);
+  const [outcomeError, setOutcomeError] = useState<string | null>(null);
   const conclusionRef = useRef<HTMLDivElement>(null);
   const { user: authUser, loading: authLoading } = useAuthUser();
 
@@ -94,6 +101,10 @@ export default function RepairPage() {
     const storedSymptoms = localStorage.getItem('rapp_symptoms') ?? '';
     setSymptoms(storedSymptoms);
     const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
+
+    if (localStorage.getItem(`rapp_outcome_submitted_${storedVin}`) === '1') {
+      setOutcomeSubmitted(true);
+    }
 
     const storedParts = localStorage.getItem(`rapp_parts_${storedVin}`);
     if (storedParts) {
@@ -171,6 +182,35 @@ export default function RepairPage() {
   const dismissSavePrompt = () => {
     localStorage.setItem(`rapp_garage_dismissed_${vin}`, '1');
     setSavePromptDismissed(true);
+  };
+
+  const submitCompletionSurvey = async () => {
+    const duration = parseInt(outcomeDuration, 10);
+    const cost = parseFloat(outcomeCost);
+    if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(cost) || cost < 0) {
+      setOutcomeError('Please enter a valid time and cost.');
+      return;
+    }
+    setOutcomeSubmitting(true);
+    setOutcomeError(null);
+    try {
+      await submitOutcome({
+        vin,
+        make: String(vinData?.make ?? ''),
+        model: String(vinData?.model ?? ''),
+        year: vinData?.year ? String(vinData.year) : null,
+        symptoms,
+        actual_cost_usd: cost,
+        actual_duration_minutes: duration,
+      });
+      localStorage.setItem(`rapp_outcome_submitted_${vin}`, '1');
+      setOutcomeSubmitted(true);
+      setShowCompletionSurvey(false);
+    } catch (err) {
+      setOutcomeError(err instanceof ApiError ? err.message : 'Could not submit — please try again.');
+    } finally {
+      setOutcomeSubmitting(false);
+    }
   };
 
   const toggleStep = (idx: number) => setCheckedSteps(prev => {
@@ -546,6 +586,111 @@ export default function RepairPage() {
                     <span style={{ fontWeight: 700 }}>Saved to your garage.</span>
                   </div>
                   <a href="/garage" className="btn btn-secondary" style={{ width: 'auto', padding: '0 18px', marginTop: 10 }}>Go to My Garage →</a>
+                </div>
+              )}
+
+              {/* ── Outcome capture (Stage 2.1): feeds the /results social-proof badge ── */}
+              {outcomeSubmitted ? (
+                <div className="card" style={{ border: '1px solid rgba(74,222,128,0.35)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <CheckCircleIcon size={18} style={{ color: '#4ade80' }} />
+                    <span style={{ fontWeight: 700 }}>Thanks — your outcome has been recorded.</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="card">
+                  <p className="card-label">Wrap Up</p>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 8 }}>Finished the job?</h3>
+                  <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
+                    Tell us how it actually went — this helps future owners of the same vehicle know what to expect.
+                  </p>
+                  <button
+                    data-testid="mark-repair-completed-btn"
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => setShowCompletionSurvey(true)}
+                    style={{ width: 'auto', padding: '0 20px', minHeight: 44 }}
+                  >
+                    Mark Repair Completed
+                  </button>
+                </div>
+              )}
+
+              {showCompletionSurvey && (
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    background: 'rgba(0,0,0,0.6)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                    padding: 16,
+                  }}
+                >
+                  <div
+                    className="card"
+                    style={{ width: 'clamp(320px, 90vw, 420px)', background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)' }}
+                  >
+                    <p className="card-label">Job Outcome Survey</p>
+                    <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: 16 }}>How did it go?</h3>
+
+                    <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 6 }}>
+                      What was your total time spent on this job? (minutes)
+                    </label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={1}
+                      inputMode="numeric"
+                      value={outcomeDuration}
+                      onChange={(e) => setOutcomeDuration(e.target.value)}
+                      placeholder="e.g. 90"
+                      style={{ width: '100%', padding: '10px', borderRadius: 6, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', marginBottom: 16, minHeight: 44 }}
+                    />
+
+                    <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 6 }}>
+                      What did parts/tools actually end up costing you? ($)
+                    </label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      inputMode="decimal"
+                      value={outcomeCost}
+                      onChange={(e) => setOutcomeCost(e.target.value)}
+                      placeholder="e.g. 145.00"
+                      style={{ width: '100%', padding: '10px', borderRadius: 6, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', marginBottom: 16, minHeight: 44 }}
+                    />
+
+                    {outcomeError && <p style={{ color: 'var(--accent-red)', fontSize: '0.85rem', marginBottom: 12 }}>{outcomeError}</p>}
+
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <button
+                        className="btn btn-secondary"
+                        type="button"
+                        onClick={() => { setShowCompletionSurvey(false); setOutcomeError(null); }}
+                        style={{ flex: 1, minHeight: 44 }}
+                        disabled={outcomeSubmitting}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        data-testid="submit-outcome-btn"
+                        className="btn btn-primary"
+                        type="button"
+                        onClick={submitCompletionSurvey}
+                        style={{ flex: 1, minHeight: 44 }}
+                        disabled={outcomeSubmitting}
+                      >
+                        {outcomeSubmitting ? <><span className="loading-spinner" aria-hidden="true" /> Submitting…</> : 'Submit'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 
