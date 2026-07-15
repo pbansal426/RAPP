@@ -42,6 +42,10 @@ _LABOR_HOURS_BY_CATEGORY: dict[str, float] = {
     "oil_service": 0.5,
     "exhaust": 2.0,
     "wheel_speed_abs": 1.0,
+    "wiper_blades": 0.2,
+    "fluid_topoff": 0.3,
+    "bulb_replacement": 0.3,
+    "tire_pressure": 0.3,
 }
 
 

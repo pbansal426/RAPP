@@ -43,6 +43,52 @@ def test_keyword_fallback_charging() -> None:
     assert template.category == "charging_battery"
 
 
+def test_keyword_fallback_wiper_blades() -> None:
+    template = select_template("My wiper blades are streaking badly", [])
+    assert template is not None
+    assert template.category == "wiper_blades"
+
+
+def test_keyword_fallback_fluid_topoff() -> None:
+    template = select_template("Need to top off my washer fluid", [])
+    assert template is not None
+    assert template.category == "fluid_topoff"
+
+
+def test_keyword_fallback_bulb_replacement() -> None:
+    template = select_template("My headlight bulb is out", [])
+    assert template is not None
+    assert template.category == "bulb_replacement"
+
+
+def test_keyword_fallback_tire_pressure() -> None:
+    template = select_template("TPMS light is on, tire pressure low", [])
+    assert template is not None
+    assert template.category == "tire_pressure"
+
+
+def test_obd_code_tire_pressure() -> None:
+    template = select_template("Dash warning light", ["C0741"])
+    assert template is not None
+    assert template.category == "tire_pressure"
+
+
+def test_bulb_rule_takes_precedence_over_brakes_for_brake_light() -> None:
+    # "brake light bulb" must not be misclassified as a brake-pad job --
+    # regression guard for the _KEYWORD_RULES ordering fix.
+    template = select_template("brake light bulb is out", [])
+    assert template is not None
+    assert template.category == "bulb_replacement"
+
+
+def test_brakes_keyword_still_wins_for_actual_brake_symptoms() -> None:
+    template = select_template("brakes squealing when I come to a stop", [])
+    assert template is not None
+    assert template.category == "brakes"
+
+
+
+
 def test_no_match_returns_none() -> None:
     assert select_template("purple unicorn glitter engine", []) is None
 

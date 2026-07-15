@@ -395,6 +395,119 @@ WHEEL_SPEED_ABS = RepairTemplate(
     parts=["ABS wheel speed sensor ($35-$90)", "Anti-seize compound ($6)"],
 )
 
+WIPER_BLADES = RepairTemplate(
+    category="wiper_blades",
+    title="Wiper Blade Replacement",
+    steps=[
+        "Park on level ground and shut off the engine, ensuring the wiper arms are in their normal resting position (not mid-cycle) before beginning.",
+        "Lift the wiper arm away from the windshield until it locks in the raised service position, taking care not to let it snap back onto the glass.",
+        "Locate the small tab or button on the underside of the wiper blade where it connects to the hooked end of the wiper arm.",
+        "Press the release tab and slide the old wiper blade down and off the hook of the wiper arm.",
+        "Compare the new wiper blade's connector type and length to the original to confirm correct fitment before discarding the old blade.",
+        "Align the new blade's connector with the hook on the wiper arm and slide it on until the release tab clicks and locks into place.",
+        "Gently tug the new blade to confirm it is fully seated and will not detach during operation.",
+        "Lower the wiper arm carefully back down onto the windshield rather than letting it snap, to avoid cracking the glass or bending the arm.",
+        "Repeat the removal and installation steps for the opposite wiper blade, and the rear wiper blade if the vehicle has one.",
+        "If a wiper arm feels loose or wobbles at its base, lift the plastic cap covering the arm's mounting nut and confirm it is snug; Torque the wiper arm retaining nut to 12-18 Nm (9-13 ft-lbs) if it was found loose, then reseat the cap.",
+        "Fill the washer fluid reservoir under the hood to the indicated full line using washer fluid rated for the current season's temperatures.",
+        "Turn the ignition to the accessory or on position without starting the engine, and cycle the wipers through a full sweep to confirm smooth movement with no skipping.",
+        "Spray the washer fluid and confirm both nozzles stream directly onto the wiper's sweep path, adjusting nozzle aim with a pin if the spray is misdirected.",
+        "Inspect the wiped windshield for streaking or missed spots, which indicates a blade is not seated flush against the glass and should be reseated.",
+        "Wipe down the new blades' rubber edge with a clean cloth and glass cleaner to remove any manufacturing residue before the first full use.",
+    ],
+    citations=[_GENERIC_CITATION],
+    parts=[
+        "Wiper blade set, driver + passenger ($15-$35)",
+        "Washer fluid, per gallon ($4-$8)",
+    ],
+)
+
+FLUID_TOPOFF = RepairTemplate(
+    category="fluid_topoff",
+    title="Under-Hood Fluid Check & Top-Off (Multi-Point)",
+    steps=[
+        "Park on level ground and allow the engine to cool for at least 15 minutes if it was recently running, since some fluid checks require a cool system.",
+        "Open the hood and secure it on its prop rod or support strut before working underneath it.",
+        "Locate the engine oil dipstick, pull it, wipe it clean, reinsert fully, then pull it again to confirm the oil level sits between the min and max marks.",
+        "Check the coolant level at the translucent overflow reservoir (not the radiator cap) against its cold-fill line, and top off with the manufacturer-specified coolant-to-water ratio if low.",
+        "Never open the radiator cap on a warm or hot engine -- pressurized coolant can cause severe burns.",
+        "Locate the brake fluid reservoir, typically near the firewall on the driver's side, and confirm the level sits between the min and max marks visible through the translucent housing.",
+        "Wipe the area around the brake fluid cap clean before removing it, so no dirt falls into the reservoir, then top off with the fluid type printed on the cap (commonly DOT 3 or DOT 4) if below the max line.",
+        "Locate the power steering fluid reservoir (not present on electric power steering vehicles) and check the level against the marked min/max lines on the reservoir or dipstick cap.",
+        "Top off power steering fluid with the manufacturer-specified type in small increments, rechecking the level between additions to avoid overfilling.",
+        "Locate the windshield washer fluid reservoir, identified by its washer-symbol cap, and fill to the indicated line with a fluid rated for the current season's temperatures.",
+        "Inspect the automatic transmission fluid level per the manufacturer's procedure if a dipstick is present (many modern vehicles use a sealed system with no user-serviceable dipstick -- confirm before attempting).",
+        "While the hood is open, check that the battery hold-down clamp is snug; if it has loosened, Torque the battery hold-down clamp bolt to 53 in-lbs (6 Nm) so the battery cannot vibrate against the tray.",
+        "Inspect each reservoir cap for cracked seals or missing gaskets, since a bad cap seal can let fluid evaporate or let contaminants in.",
+        "Wipe up any spilled fluid immediately with a shop rag, since spilled coolant, oil, or brake fluid can damage drive belts, hoses, or paint.",
+        "Close and latch the hood securely, confirming both hood latches engage before driving.",
+        "Start the engine and check that warning lights related to fluid levels (oil pressure, coolant temperature, brake fluid) are extinguished.",
+    ],
+    citations=[_GENERIC_CITATION],
+    parts=[
+        "Engine coolant, per gallon ($15-$25)",
+        "Brake fluid, DOT 3/4 ($8-$12)",
+        "Power steering fluid ($8-$15)",
+        "Washer fluid, per gallon ($4-$8)",
+    ],
+)
+
+BULB_REPLACEMENT = RepairTemplate(
+    category="bulb_replacement",
+    title="Headlight, Taillight & Turn Signal Bulb Replacement",
+    steps=[
+        "Park on level ground, shut off the engine, and turn off all lights before beginning to avoid burns from a hot bulb.",
+        "Identify which bulb is out by cycling through headlights, taillights, brake lights, and turn signals with a helper or by watching reflections in a storefront window.",
+        "Open the hood for a headlight bulb, or open the trunk/hatch and remove any interior trim panel covering the back of the taillight housing for a rear bulb.",
+        "Locate the bulb socket's electrical connector on the back of the headlight or taillight housing and disconnect it by releasing the locking tab.",
+        "Rotate the bulb-and-socket assembly counterclockwise about a quarter turn to release it from the housing, then pull it straight out.",
+        "For headlight bulbs, avoid touching the new bulb's glass with bare fingers -- skin oils cause hot spots that can cause premature failure; handle it with a clean cloth or gloves.",
+        "Compare the new bulb's part number and base type to the original before installing to confirm correct fitment.",
+        "Insert the new bulb into the socket, aligning the locating tabs with the socket's slots so it can only seat in the correct orientation.",
+        "Rotate the bulb-and-socket assembly clockwise a quarter turn to lock it back into the housing.",
+        "Reconnect the electrical connector to the back of the bulb socket until it clicks into place.",
+        "If accessing the taillight required removing the housing itself rather than a rear access panel, reinstall the housing and Torque the housing retaining nuts to 44 in-lbs (5 Nm), taking care not to overtighten the plastic mounting bosses.",
+        "Turn on the corresponding light (headlight, taillight, brake light, or turn signal) and visually confirm the new bulb illuminates correctly.",
+        "Reinstall any interior trim panel removed to access the taillight assembly, confirming all retaining clips snap fully back into place.",
+        "Close the hood or trunk/hatch and confirm both latch securely.",
+        "Walk around the vehicle at dusk or in a shaded area to visually confirm even brightness and correct color between the new bulb and its opposite-side match.",
+        "If a 'bulb out' warning light remains on the dashboard after replacement, check the bulb's wattage rating matches the original, since an incorrect wattage can trigger a false warning even when the bulb itself works.",
+    ],
+    citations=[_GENERIC_CITATION],
+    parts=[
+        "Headlight bulb, per bulb ($8-$35)",
+        "Taillight/brake bulb, per bulb ($4-$12)",
+        "Turn signal bulb, per bulb ($3-$10)",
+    ],
+)
+
+TIRE_PRESSURE = RepairTemplate(
+    category="tire_pressure",
+    title="Tire Pressure Check, Adjustment & TPMS Reset",
+    steps=[
+        "Check tire pressure only when tires are cold -- ideally before driving more than a mile, or after the vehicle has sat for at least 3 hours, since driving heats the tires and raises the reading.",
+        "Locate the manufacturer's recommended cold tire pressure on the placard inside the driver's door jamb, not the maximum pressure molded into the tire's sidewall.",
+        "Remove the valve stem cap from the first tire and set it somewhere it will not be lost.",
+        "Press a tire pressure gauge firmly onto the valve stem until the hissing stops and read the pressure, pressing straight on to avoid a false low reading from air escaping around the gauge.",
+        "Take two or three readings and use the most consistent value, since a crooked gauge placement can under-report pressure.",
+        "If the pressure is below the door-placard specification, add air in short bursts using a portable compressor or gas-station air pump, rechecking the pressure between bursts.",
+        "If the pressure is above the specification, press the small pin inside the valve stem briefly with the gauge's bleed tool to release air in short bursts until at spec.",
+        "Reinstall the valve stem cap finger-tight to keep out dirt and moisture -- overtightening can crack the plastic cap.",
+        "Repeat the check-and-adjust process for all four tires, plus the spare if it is a full-size or matching spare intended for road use.",
+        "Inspect each tire's tread for uneven wear patterns while at the wheel, which can indicate alignment or suspension issues beyond a simple pressure adjustment.",
+        "If the vehicle is also due for a tire rotation as part of this service, loosen the lug nuts a quarter turn while the wheel is still on the ground, then raise the vehicle on jack stands rated for its weight.",
+        "Rotate the tires per the manufacturer's pattern (commonly front-to-back on the same side, or a cross pattern for non-directional tires) and reinstall each wheel.",
+        "Torque the lug nuts to the manufacturer specification (commonly 80-100 ft-lbs / 108-135 Nm) in a star pattern once the vehicle is lowered back to the ground.",
+        "On vehicles with a TPMS relearn procedure, follow the manufacturer's reset sequence (commonly holding the TPMS reset button under the dash until the light blinks, then driving at 15+ mph for several minutes) so the system recognizes the corrected pressures.",
+        "Confirm the dashboard TPMS or 'check tire pressure' warning light turns off after driving; if it remains on, recheck all four tires plus the spare, since a single missed tire keeps the light active.",
+    ],
+    citations=[_GENERIC_CITATION],
+    parts=[
+        "Tire pressure gauge (one-time, $6-$15)",
+        "Valve stem caps, set of 4 ($3)",
+    ],
+)
+
 _TEMPLATES: dict[str, RepairTemplate] = {
     t.category: t
     for t in [
@@ -411,6 +524,10 @@ _TEMPLATES: dict[str, RepairTemplate] = {
         OIL_SERVICE,
         EXHAUST,
         WHEEL_SPEED_ABS,
+        WIPER_BLADES,
+        FLUID_TOPOFF,
+        BULB_REPLACEMENT,
+        TIRE_PRESSURE,
     ]
 }
 
@@ -425,6 +542,7 @@ _CODE_RANGES: list[tuple[str, str, str]] = [
     ("P0562", "P0563", "charging_battery"),
     ("P0117", "P0128", "cooling_system"),
     ("C0035", "C0050", "wheel_speed_abs"),
+    ("C0740", "C0749", "tire_pressure"),
 ]
 
 _KEYWORD_RULES: list[tuple[re.Pattern[str], str]] = [
@@ -436,6 +554,13 @@ _KEYWORD_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"lean|vacuum leak|fuel trim", re.IGNORECASE), "fuel_trim_lean"),
     (re.compile(r"catalytic|catalyst", re.IGNORECASE), "catalytic_converter"),
     (re.compile(r"evap|gas cap|purge valve|vent valve", re.IGNORECASE), "evap_leak"),
+    (
+        re.compile(
+            r"headlight|tail ?light|brake light bulb|turn signal bulb|bulb (is )?(out|blown|burned out)",
+            re.IGNORECASE,
+        ),
+        "bulb_replacement",
+    ),
     (re.compile(r"brake|squeal|grinding|rotor|caliper|pad", re.IGNORECASE), "brakes"),
     (
         re.compile(r"suspension|strut|shock|coilover|clunk|bounc", re.IGNORECASE),
@@ -459,6 +584,24 @@ _KEYWORD_RULES: list[tuple[re.Pattern[str], str]] = [
     (
         re.compile(r"abs light|wheel speed|traction control", re.IGNORECASE),
         "wheel_speed_abs",
+    ),
+    (
+        re.compile(r"wiper|windshield smear|streak(y|ing)? wipers?", re.IGNORECASE),
+        "wiper_blades",
+    ),
+    (
+        re.compile(
+            r"washer fluid|power steering fluid|fluid top.?off|topping off fluids|low on fluid",
+            re.IGNORECASE,
+        ),
+        "fluid_topoff",
+    ),
+    (
+        re.compile(
+            r"tire pressure|tpms|low tire|tire light|under ?inflated|over ?inflated",
+            re.IGNORECASE,
+        ),
+        "tire_pressure",
     ),
 ]
 
