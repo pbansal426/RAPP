@@ -70,6 +70,9 @@ def _to_user_response(user: DbUser) -> UserResponse:
         email=user.email,
         display_name=user.display_name,
         subscription_status=user.subscription_status,
+        skill_level=user.skill_level or "Beginner",
+        completed_jobs_count=user.completed_jobs_count or 0,
+        skill_badges=user.skill_badges if user.skill_badges is not None else [],
     )
 
 
@@ -179,6 +182,8 @@ def update_me(
 ) -> UserResponse:
     if request.display_name is not None:
         current_user.display_name = request.display_name.strip() or None
+    if request.skill_level in ("Beginner", "Intermediate", "Advanced"):
+        current_user.skill_level = request.skill_level
     db.add(current_user)
     db.commit()
     db.refresh(current_user)

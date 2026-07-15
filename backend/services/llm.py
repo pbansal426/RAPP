@@ -141,6 +141,7 @@ async def generate_repair_procedure(
     symptoms: str,
     obd_codes: list[str],
     user_tools: list[str],
+    skill_level: str = "Beginner",
 ) -> tuple[list[str], list[str]]:
     """Retrieve OEM text for the query/vehicle and generate grounded repair
     steps from it. Returns (repair_steps, citations).
@@ -180,7 +181,7 @@ async def generate_repair_procedure(
     )
 
     gemini_steps = await call_gemini_repair_steps(
-        prompt, system_prompt=_GROUNDED_SYSTEM_PROMPT
+        prompt, system_prompt=_GROUNDED_SYSTEM_PROMPT, skill_level=skill_level
     )
     if gemini_steps:
         return gemini_steps, citations

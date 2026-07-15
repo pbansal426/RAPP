@@ -179,11 +179,18 @@ async def repair(
             warning_message=warning_msg,
         )
 
+    skill_level = "Beginner"
+    if user and user.skill_level:
+        skill_level = user.skill_level
+    elif request.skill_level:
+        skill_level = request.skill_level
+
     repair_steps, citations = await generate_repair_procedure(
         vin_meta=vin_meta,
         symptoms=request.symptoms,
         obd_codes=obd_list,
         user_tools=tools_list,
+        skill_level=skill_level,
     )
 
     return RepairResponse(

@@ -10,6 +10,9 @@ export interface AuthUser {
   email: string;
   displayName: string | null;
   subscriptionStatus: string;
+  skillLevel: string;
+  completedJobsCount: number;
+  skillBadges: string[];
 }
 
 interface UserResponse {
@@ -17,6 +20,9 @@ interface UserResponse {
   email: string;
   display_name: string | null;
   subscription_status: string;
+  skill_level?: string;
+  completed_jobs_count?: number;
+  skill_badges?: string[];
 }
 
 interface AuthResponse {
@@ -30,6 +36,9 @@ function toAuthUser(user: UserResponse): AuthUser {
     email: user.email,
     displayName: user.display_name,
     subscriptionStatus: user.subscription_status || 'free',
+    skillLevel: user.skill_level || 'Beginner',
+    completedJobsCount: user.completed_jobs_count || 0,
+    skillBadges: user.skill_badges || [],
   };
 }
 
@@ -76,8 +85,17 @@ export async function logOut(): Promise<void> {
   broadcast(null);
 }
 
-export async function updateAccount(displayName: string | null): Promise<AuthUser> {
-  const res = await api.patch<UserResponse>('/api/auth/me', { display_name: displayName });
+export async function updateAccount(
+  displayName: string | null,
+  skillLevel?: string
+): Promise<AuthUser> {
+  const payload: { display_name: string | null; skill_level?: string } = {
+    display_name: displayName,
+  };
+  if (skillLevel !== undefined) {
+    payload.skill_level = skillLevel;
+  }
+  const res = await api.patch<UserResponse>('/api/auth/me', payload);
   const user = toAuthUser(res);
   broadcast(user);
   return user;

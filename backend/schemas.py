@@ -97,6 +97,7 @@ class RepairRequest(BaseModel):
     tools: list[str] | str | None = None
     stripe_session_id: str
     vehicle: VehicleInfo | None = None
+    skill_level: str | None = None
 
     @field_validator("obd_codes")
     @classmethod
@@ -192,6 +193,9 @@ class UserResponse(BaseModel):
     email: str
     display_name: str | None = None
     subscription_status: str = "free"
+    skill_level: str = "Beginner"
+    completed_jobs_count: int = 0
+    skill_badges: list[str] = []
 
 
 class AuthResponse(BaseModel):
@@ -201,6 +205,7 @@ class AuthResponse(BaseModel):
 
 class UpdateAccountRequest(BaseModel):
     display_name: str | None = None
+    skill_level: str | None = None
 
 
 # --- Saved repairs ---

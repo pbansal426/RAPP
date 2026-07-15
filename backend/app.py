@@ -31,6 +31,26 @@ async def lifespan(app: FastAPI) -> Any:
         "Starting up FastAPI application", port=settings.port, debug=settings.debug
     )
     Base.metadata.create_all(bind=engine)
+    try:
+        with engine.begin() as conn:
+            if engine.dialect.name == "sqlite":
+                cols = [
+                    row[1] for row in conn.exec_driver_sql("PRAGMA table_info(users)")
+                ]
+                if cols and "skill_level" not in cols:
+                    conn.exec_driver_sql(
+                        "ALTER TABLE users ADD COLUMN skill_level VARCHAR DEFAULT 'Beginner'"
+                    )
+                if cols and "completed_jobs_count" not in cols:
+                    conn.exec_driver_sql(
+                        "ALTER TABLE users ADD COLUMN completed_jobs_count INTEGER DEFAULT 0"
+                    )
+                if cols and "skill_badges" not in cols:
+                    conn.exec_driver_sql(
+                        "ALTER TABLE users ADD COLUMN skill_badges JSON DEFAULT '[]'"
+                    )
+    except Exception as e:
+        logger.warning("Pre-migration check failed or not needed", error=str(e))
     # Snapshot the irreplaceable rapp.db to the external SSD on every startup (a
     # routine dev checkpoint). No-ops cleanly when the SSD is unplugged and never
     # blocks or fails startup.

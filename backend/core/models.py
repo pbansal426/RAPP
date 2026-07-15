@@ -31,6 +31,13 @@ class DbUser(Base):
     mor_customer_id: Mapped[str | None] = mapped_column(default=None)
     mor_subscription_id: Mapped[str | None] = mapped_column(default=None)
     subscription_expires_at: Mapped[datetime | None] = mapped_column(default=None)
+    skill_level: Mapped[str] = mapped_column(
+        default="Beginner"
+    )  # "Beginner", "Intermediate", "Advanced"
+    completed_jobs_count: Mapped[int] = mapped_column(default=0)
+    skill_badges: Mapped[list[str] | None] = mapped_column(
+        JSON, default=list
+    )  # e.g., ["brakes_101", "electrical_basics"]
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     repairs: Mapped[list["DbSavedRepair"]] = relationship(

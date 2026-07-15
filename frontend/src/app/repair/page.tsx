@@ -8,7 +8,7 @@ import WiringDiagram from './diagrams/WiringDiagram';
 import ChatPanel from './ChatPanel';
 import ConclusionPhase from './ConclusionPhase';
 import SaveGuidePrompt from './SaveGuidePrompt';
-import { useAuthUser } from '@/lib/auth';
+import { useAuthUser, updateAccount } from '@/lib/auth';
 import { completePendingSave } from '@/lib/pendingSave';
 import { submitOutcome } from '@/lib/outcomes';
 import type { RecommendedPart, VehicleInfo } from '@/lib/types';
@@ -57,13 +57,15 @@ export default function RepairPage() {
   const [outcomeError, setOutcomeError] = useState<string | null>(null);
   const conclusionRef = useRef<HTMLDivElement>(null);
   const { user: authUser, loading: authLoading } = useAuthUser();
+  const [currentSkillLevel, setCurrentSkillLevel] = useState<string>('Beginner');
 
   const generateAndCache = (
     storedVin: string,
     storedSymptoms: string,
     tools: string[],
     sessionId: string,
-    parsedVinData: VehicleInfo | null
+    parsedVinData: VehicleInfo | null,
+    skill: string = currentSkillLevel
   ) => {
     setLoading(true);
     api.post<RepairResponse>('/api/repair', {
@@ -73,13 +75,40 @@ export default function RepairPage() {
       tools,
       stripe_session_id: sessionId,
       vehicle: parsedVinData,
+      skill_level: skill,
     })
       .then((res) => {
         setRepair(res);
-        localStorage.setItem(`rapp_repair_${storedVin}`, JSON.stringify(res));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`rapp_repair_${storedVin}`, JSON.stringify(res));
+        }
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to load repair steps.'))
       .finally(() => setLoading(false));
+  };
+
+  const handleSwitchSkillLevel = async (newSkill: string) => {
+    setCurrentSkillLevel(newSkill);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('rapp_skill_level', newSkill);
+    }
+    if (authUser) {
+      try {
+        await updateAccount(authUser.displayName, newSkill);
+      } catch {}
+    }
+    const confirmed = window.confirm(
+      `Switching to "${newSkill}" mode will regenerate your procedure steps tailored to this skill level. Continue?`
+    );
+    if (confirmed && vin) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(`rapp_repair_${vin}`);
+        localStorage.removeItem(`rapp_repair_checked_${vin}`);
+      }
+      const sessionId = localStorage.getItem(`rapp_unlocked_${vin}`) || '';
+      const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
+      generateAndCache(vin, symptoms, tools, sessionId, vinData, newSkill);
+    }
   };
 
   useEffect(() => {
@@ -111,6 +140,9 @@ export default function RepairPage() {
       try { setParts(JSON.parse(storedParts)); } catch { /* malformed cache, ignore */ }
     }
 
+    const storedSkill = localStorage.getItem('rapp_skill_level') || authUser?.skillLevel || 'Beginner';
+    setCurrentSkillLevel(storedSkill);
+
     // Once generated (either warmed in the background from /results, or by
     // a previous visit here), the guide is permanent -- reloading this page
     // must never silently re-generate it. Only "Start Over" clears this.
@@ -127,7 +159,7 @@ export default function RepairPage() {
       }
     }
 
-    generateAndCache(storedVin, storedSymptoms, tools, sessionId || '', parsedVinData);
+    generateAndCache(storedVin, storedSymptoms, tools, sessionId || '', parsedVinData, storedSkill);
   }, [router, authUser, authLoading]);
 
   const startOver = () => {
@@ -219,10 +251,13 @@ export default function RepairPage() {
     return next;
   });
 
-  // Helper to highlight tools and torque specs in step text
+  // Helper to highlight tools, torque specs, and bailout warnings in step text
   const formatStepText = (text: string) => {
-    const parts = text.split(/(Torque [^.,;]+)/gi);
-    return parts.map((part, i) => {
+    const hasBailout = /\[POINT OF NO RETURN\]/i.test(text);
+    const cleanText = text.replace(/\[POINT OF NO RETURN\]/gi, '').trim();
+
+    const parts = cleanText.split(/(Torque [^.,;]+)/gi);
+    const formatted = parts.map((part, i) => {
       if (/^Torque /i.test(part)) {
         return (
           <span key={i} className="torque-spec" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -242,6 +277,33 @@ export default function RepairPage() {
         return sub;
       });
     });
+
+    if (hasBailout) {
+      return (
+        <div style={{ width: '100%', marginTop: 2 }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+            color: '#fff',
+            padding: '4px 10px',
+            borderRadius: '6px',
+            fontSize: '0.75rem',
+            fontWeight: 800,
+            letterSpacing: '0.5px',
+            marginBottom: '8px',
+            textTransform: 'uppercase',
+            boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)'
+          }}>
+            <ShieldAlertIcon size={14} /> Point of No Return / Bailout Threshold
+          </div>
+          <div style={{ color: '#fef2f2', fontWeight: 600, lineHeight: 1.5 }}>{formatted}</div>
+        </div>
+      );
+    }
+
+    return formatted;
   };
 
   if (!unlocked && !loading) return null;
@@ -429,6 +491,57 @@ export default function RepairPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                   <p className="card-label" style={{ margin: 0 }}>Step-by-Step Procedure</p>
                   <span className="badge badge-free">RAG &amp; AI Verified</span>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                  padding: '12px 16px',
+                  background: 'rgba(30, 41, 59, 0.6)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  marginBottom: 20
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <QualityCheckIcon size={18} style={{ color: 'var(--accent-orange)' }} />
+                    <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f1f5f9' }}>
+                      Active Guidance Level: <span style={{ color: 'var(--accent-yellow)' }}>{currentSkillLevel} Mode</span>
+                    </span>
+                    {authUser?.completedJobsCount !== undefined && authUser.completedJobsCount > 0 && (
+                      <span className="badge" style={{ background: 'rgba(74, 222, 128, 0.15)', color: '#4ade80', fontSize: '0.75rem', fontWeight: 700 }}>
+                        {authUser.completedJobsCount} Job{authUser.completedJobsCount > 1 ? 's' : ''} Completed
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Verbosity:</span>
+                    {['Beginner', 'Intermediate', 'Advanced'].map((lvl) => {
+                      const isActive = currentSkillLevel === lvl;
+                      return (
+                        <button
+                          key={lvl}
+                          type="button"
+                          onClick={() => !isActive && handleSwitchSkillLevel(lvl)}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '6px',
+                            fontSize: '0.75rem',
+                            fontWeight: isActive ? 800 : 600,
+                            background: isActive ? 'var(--accent-orange)' : 'rgba(255, 255, 255, 0.06)',
+                            color: isActive ? '#0f172a' : '#cbd5e1',
+                            border: 'none',
+                            cursor: isActive ? 'default' : 'pointer'
+                          }}
+                        >
+                          {lvl}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {(() => {

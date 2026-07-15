@@ -89,6 +89,7 @@ class RepairStepsSchema(BaseModel):
 async def call_gemini_repair_steps(
     prompt: str,
     system_prompt: str = "You are an automotive AI expert mechanic.",
+    skill_level: str = "Beginner",
 ) -> list[str] | None:
     """Generate repair steps via Gemini structured output. The torque-callout
     contract (frontend regex requires literal "Torque " prefix -- see
@@ -97,12 +98,38 @@ async def call_gemini_repair_steps(
     client = get_genai_client()
     if not client:
         return None
+
+    bailout_instruction = (
+        " Always inject an explicit '[POINT OF NO RETURN]' warning step right before the "
+        "step where critical disassembly, seal breaking, or fluid draining occurs (e.g., "
+        "'[POINT OF NO RETURN] Before removing the intake manifold bolts, verify you have "
+        "new replacement gaskets on hand. If you cannot complete reassembly today, do not "
+        "proceed past this step.')."
+    )
+    if skill_level == "Advanced":
+        skill_instruction = (
+            " Target audience is an Advanced technician: keep steps concise and high-density, "
+            "focusing strictly on torque specs, sequence orders, and TSB gotchas without beginner hand-holding."
+        )
+    elif skill_level == "Intermediate":
+        skill_instruction = (
+            " Target audience is an Intermediate DIYer: provide balanced technical explanations "
+            "with clear component locations and torque callouts."
+        )
+    else:
+        skill_instruction = (
+            " Target audience is a Beginner DIYer: include detailed tool explanations, "
+            "righty-tighty reminders, connector release tips, and step-by-step safety precautions."
+        )
+
+    full_system_prompt = f"{system_prompt}{bailout_instruction}{skill_instruction}"
+
     try:
         response = await client.aio.models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt,
             config=genai_types.GenerateContentConfig(
-                system_instruction=system_prompt,
+                system_instruction=full_system_prompt,
                 response_mime_type="application/json",
                 response_schema=RepairStepsSchema,
             ),

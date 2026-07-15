@@ -142,6 +142,24 @@ def submit_outcome(
         actual_duration_minutes=request.actual_duration_minutes,
     )
     db.add(outcome)
+
+    if user:
+        user.completed_jobs_count = (user.completed_jobs_count or 0) + 1
+        badges = list(user.skill_badges or [])
+        badge_name = f"{category}_completed"
+        if badge_name not in badges:
+            badges.append(badge_name)
+        user.skill_badges = badges
+
+        if user.completed_jobs_count >= 10:
+            user.skill_level = "Advanced"
+        elif (
+            user.completed_jobs_count >= 3
+            and (user.skill_level or "Beginner") == "Beginner"
+        ):
+            user.skill_level = "Intermediate"
+        db.add(user)
+
     db.commit()
     db.refresh(outcome)
 

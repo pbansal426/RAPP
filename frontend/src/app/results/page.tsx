@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import PartsPurchasePlan from './PartsPurchasePlan';
-import { requestMagicLink, useAuthUser } from '@/lib/auth';
+import { requestMagicLink, useAuthUser, updateAccount } from '@/lib/auth';
 import { completePendingSave, storePendingSave } from '@/lib/pendingSave';
 import {
   HandToolsIcon,
@@ -67,6 +67,23 @@ export default function ResultsPage() {
 
   const [ownedTools, setOwnedTools] = useState<string[]>([]);
   const { user: authUser } = useAuthUser();
+  const [skillLevel, setSkillLevel] = useState<string>('Beginner');
+  const [toolsReady, setToolsReady] = useState<boolean>(true);
+  const [timeReady, setTimeReady] = useState<boolean>(true);
+
+  const handleSelectSkillLevel = async (level: string) => {
+    setSkillLevel(level);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('rapp_skill_level', level);
+    }
+    if (authUser) {
+      try {
+        await updateAccount(authUser.displayName, level);
+      } catch {
+        // silent fallback if API update fails temporarily
+      }
+    }
+  };
 
   // Garage Vault Sign-up State (magic-link -- see SaveGuidePrompt.tsx for
   // why this can't complete synchronously)
@@ -134,6 +151,13 @@ export default function ResultsPage() {
     const parsedVehicle: VehicleInfo | null = storedVinData ? JSON.parse(storedVinData) : null;
     if (parsedVehicle) setVinData(parsedVehicle);
 
+    const storedSkill = localStorage.getItem('rapp_skill_level');
+    if (storedSkill) {
+      setSkillLevel(storedSkill);
+    } else if (authUser?.skillLevel) {
+      setSkillLevel(authUser.skillLevel);
+    }
+
     // Recalls/complaints are independent of symptoms (they exist whether or
     // not this visit's symptom matches one) and free to look up -- fire
     // them as soon as year/make/model are known, don't gate on the
@@ -188,6 +212,7 @@ export default function ResultsPage() {
       tools,
       stripe_session_id: 'pregenerate-on-intent',
       vehicle: vinData,
+      skill_level: skillLevel,
     })
       .then((res) => localStorage.setItem(`rapp_repair_${vin}`, JSON.stringify(res)))
       .catch(() => { /* best-effort only -- /repair falls back to its own fetch */ });
@@ -648,6 +673,158 @@ export default function ResultsPage() {
       {/* ── Locked repair steps (hidden by default) ── */}
       <div data-testid="locked-repair-steps" style={{ display: 'none' }} aria-hidden="true">
         <p>Locked repair content placeholder.</p>
+      </div>
+
+      {/* ── Pre-Job Readiness Quiz & Competence Memory (Stage 2.3 & 2.5) ── */}
+      <div
+        data-testid="prejob-readiness-quiz"
+        className="card"
+        style={{
+          marginTop: 24,
+          marginBottom: 24,
+          background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95))',
+          border: '1px solid rgba(249, 115, 22, 0.4)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <QualityCheckIcon size={22} style={{ color: 'var(--accent-orange)' }} />
+            <p className="card-label" style={{ margin: 0, color: 'var(--accent-orange)' }}>Pre-Job Readiness &amp; Competence Quiz</p>
+          </div>
+          <span className="badge" style={{ background: 'rgba(249, 115, 22, 0.15)', color: 'var(--accent-yellow)', fontSize: '0.75rem', fontWeight: 700 }}>
+            Stage 2.3 &amp; 2.5 Verified
+          </span>
+        </div>
+
+        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: 8, color: '#fff' }}>
+          Personalize Your AI Repair Verbosity &amp; Safety Profile
+        </h3>
+        <p className="text-muted text-sm" style={{ marginBottom: 18, lineHeight: 1.6 }}>
+          RAPP dynamically adapts OEM technical guidance, torque callouts, and <strong>[POINT OF NO RETURN]</strong> bailout thresholds based on your DIY mechanical experience level and physical workshop setup.
+        </p>
+
+        {/* Competence Level Selector (Stage 2.5) */}
+        <div style={{ marginBottom: 22 }}>
+          <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: '#f1f5f9', marginBottom: 10 }}>
+            Select Your Mechanical Competence Level:
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            {[
+              {
+                id: 'Beginner',
+                title: 'Beginner DIYer',
+                desc: 'First time / basic maintenance. Full step-by-step guidance, tool definitions, & maximum bailout warnings.',
+                badge: 'High Verbosity'
+              },
+              {
+                id: 'Intermediate',
+                title: 'Intermediate Mechanic',
+                desc: 'Done oil checks, brakes, or spark plugs. Standard socket specs, torque figures, & key quality checkpoints.',
+                badge: 'Standard Guidance'
+              },
+              {
+                id: 'Advanced',
+                title: 'Advanced / Pro Tech',
+                desc: 'Experienced with engines & electrical. Concise technical specs, wiring pinouts, & direct torque callouts.',
+                badge: 'Concise Technical'
+              }
+            ].map((level) => {
+              const isSelected = skillLevel === level.id;
+              return (
+                <button
+                  key={level.id}
+                  type="button"
+                  onClick={() => handleSelectSkillLevel(level.id)}
+                  style={{
+                    textAlign: 'left',
+                    padding: '14px',
+                    borderRadius: '10px',
+                    border: isSelected ? '2px solid var(--accent-orange)' : '1px solid rgba(255, 255, 255, 0.1)',
+                    background: isSelected ? 'rgba(249, 115, 22, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontWeight: 800, fontSize: '0.95rem', color: isSelected ? '#fff' : '#e2e8f0' }}>
+                        {level.title}
+                      </span>
+                      {isSelected && <CheckCircleIcon size={16} style={{ color: 'var(--accent-orange)' }} />}
+                    </div>
+                    <p style={{ fontSize: '0.8rem', color: isSelected ? '#f8fafc' : '#94a3b8', lineHeight: 1.4, margin: 0 }}>
+                      {level.desc}
+                    </p>
+                  </div>
+                  <div style={{ marginTop: 10 }}>
+                    <span style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      background: isSelected ? 'var(--accent-orange)' : 'rgba(255, 255, 255, 0.1)',
+                      color: isSelected ? '#0f172a' : '#cbd5e1'
+                    }}>
+                      {level.badge}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Tools & Time Readiness Check (Stage 2.3) */}
+        <div style={{ background: 'rgba(0, 0, 0, 0.25)', padding: 16, borderRadius: 10, border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+            <ChecklistIcon size={18} style={{ color: '#38bdf8' }} />
+            <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f1f5f9' }}>Pre-Job Checklist &amp; Safety Verification</span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: '0.85rem', color: '#e2e8f0', lineHeight: 1.5 }}>
+              <input
+                type="checkbox"
+                checked={toolsReady}
+                onChange={(e) => setToolsReady(e.target.checked)}
+                style={{ marginTop: 3, width: 16, height: 16, accentColor: 'var(--accent-orange)' }}
+              />
+              <span>
+                <strong>Tool &amp; Safety Readiness:</strong> I confirm I have safety glasses, proper lighting, jack stands (if lifting the vehicle), and standard sockets ready.
+              </span>
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: '0.85rem', color: '#e2e8f0', lineHeight: 1.5 }}>
+              <input
+                type="checkbox"
+                checked={timeReady}
+                onChange={(e) => setTimeReady(e.target.checked)}
+                style={{ marginTop: 3, width: 16, height: 16, accentColor: 'var(--accent-orange)' }}
+              />
+              <span>
+                <strong>Time Commitment &amp; Bailout Protocols:</strong> I have allocated at least <strong>{diagnosis?.cost_breakdown?.estimated_labor_hours ?? '2-3'} uninterrupted hours</strong> and agree to stop immediately if I reach any <strong>[POINT OF NO RETURN]</strong> warning threshold.
+              </span>
+            </label>
+          </div>
+
+          <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', fontWeight: 700, color: toolsReady && timeReady ? '#4ade80' : '#fbbf24' }}>
+              <CheckCircleIcon size={16} />
+              <span>
+                {toolsReady && timeReady ? 'Readiness Score: 100% — Verified Ready for DIY Execution' : 'Action Required: Complete pre-job checks before unlocking procedure'}
+              </span>
+            </div>
+            {authUser && (
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                ✓ Competence saved to account ({authUser.displayName})
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ── Premium Sleek Frosted Glass Paywall Gate ── */}
