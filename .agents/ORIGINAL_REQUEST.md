@@ -334,3 +334,59 @@ Enhance `frontend/src/app/results/*` with:
 - [ ] Running `cd frontend && npm run build` (or `npx next build`) succeeds without TypeScript compilation errors or broken imports.
 - [ ] All interactive UI flows (4-step selector, OBD-II tag addition/removal, tool inventory filtering, and sign-up modal trigger) function smoothly without client-side console runtime errors.
 
+## Follow-up — 2026-07-15T08:55:52Z
+
+Implement **Combined Task Block 1: Payment & Monetization Overhaul** (`Stages 1.3 & 1.4 Combined`) for the RAPP Automotive AI Repair Engine. This replaces raw Stripe with Polar Merchant-of-Record (MoR), introduces dynamic value-anchored tiered single-incident pricing ($4.99 / $9.99 / $14.99), and integrates the primary $19.99/yr Annual Pass subscription across the full-stack (FastAPI backend + Next.js frontend).
+
+Working directory: /Users/prathambansal/Dev/RAPP
+Integrity mode: development
+
+## Requirements
+
+### R1. Polar MoR Payment Engine & Webhook Verification (`Stage 1.3`)
+- Replace raw Stripe (`backend/services/stripe.py`) with `backend/services/payments_mor.py` utilizing the Polar REST API/SDK.
+- Re-wire `backend/routers/payments.py` (`create_checkout` and `/api/webhooks/payments`) to generate Polar checkout sessions and strictly verify `X-Polar-Signature` HMAC signatures on incoming webhooks (`subscription.created`, `subscription.updated`, `subscription.cancelled`, and checkout completion).
+- Handle the legacy `/api/webhooks/stripe` route by returning `410 Gone` with a clear message indicating that the Stripe webhook is deprecated in favor of `/api/webhooks/payments`.
+- Maintain the existing zero-cost mock checkout fallback (`mode="mock"`) when Polar keys (`POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`) are not configured in `.env`.
+
+### R2. Value-Anchored Tiered Single-Incident Pricing (`Stage 1.3 & 1.4`)
+- Replace the flat $3.99 single-guide unlock (`_GUIDE_PRICE_USD_CENTS = 399`) with dynamic tier resolution based on repair category and estimated dealership cost (`backend/pricing.py:estimate_pricing()`):
+  - **Tier 1 ($4.99 | 499 cents)**: Category A / Quick Maintenance (dealer quote < $150; e.g., wipers, bulbs, oil check).
+  - **Tier 2 ($9.99 | 999 cents)**: Category B / Standard Diagnostic & Repair (dealer quote $150–$600; e.g., brakes, alternator, sensors).
+  - **Tier 3 ($14.99 | 1499 cents)**: Category C / Major Complex Repair (dealer quote > $600; e.g., timing chain, suspension, complex diagnostics).
+- Update `backend/schemas.py` (`CheckoutRequest` & `CheckoutResponse`) and `backend/routers/payments.py` to accept and process tier-specific prices (`tier_1`, `tier_2`, `tier_3`).
+- On `frontend/src/app/results/page.tsx`, strictly lock the Single Job Unlock card price to the diagnosed tier ($4.99 / $9.99 / $14.99) returned by the backend diagnosis alongside the potential savings badge (`"Save ~$415 vs Dealership"`).
+
+### R3. Annual Pass Subscription ($19.99/yr Primary SKU) & Dual-Card UI (`Stage 1.4`)
+- Update the `DbUser` SQLAlchemy schema in `backend/core/models.py` with subscription tracking:
+  ```python
+  subscription_status: Mapped[str] = mapped_column(default="free")  # "free", "active", "cancelled", "expired"
+  mor_customer_id: Mapped[str | None] = mapped_column(default=None)
+  mor_subscription_id: Mapped[str | None] = mapped_column(default=None)
+  subscription_expires_at: Mapped[datetime | None] = mapped_column(default=None)
+  ```
+- Update `POST /api/repair` (`backend/routers/repair.py`) to grant instant guide generation if either `DbUser.subscription_status == "active"` OR a valid single-incident `session_id` is supplied in the request.
+- On `frontend/src/app/results/page.tsx`, render two clean checkout cards following our 7 Pillars of RAPP UI Design:
+  - ⭐ **Annual Pass ($19.99/yr) [RECOMMENDED]**: Unlimited verified guides, persistent garage storage, and recall alerts.
+  - **Single Job Unlock ($4.99 / $9.99 / $14.99)**: One-time guide for the current diagnosis (locked to the diagnosed tier price).
+
+## Verification Resources
+- Existing unit test suite (`tests/unit/`) running via `uv run pytest tests/unit/ -v`.
+- Existing E2E fault-injection & Playwright test harness (`./tests/verify_tests.sh`).
+- Frontend production build check (`cd frontend && ./node_modules/.bin/next build`).
+
+## Acceptance Criteria
+
+### Automated Unit & Integration Tests
+- [ ] `uv run pytest tests/unit/ -v` passes cleanly with zero regressions on existing auth, RAG, VIN, and diagnostic endpoints.
+- [ ] New unit tests (`tests/unit/test_payments_mor.py` and updated `test_payments.py`) verify:
+  - Polar checkout session generation in both mock mode (`mode="mock"`) and live mode (`mode="live"`).
+  - Dynamic tier price calculation (`$4.99` / `$9.99` / `$14.99`) matching `estimate_pricing()` tier intervals.
+  - HMAC signature verification (`verify_webhook_signature` raising 400 on forged signatures and correctly registering subscription and checkout completion payloads).
+  - Legacy `POST /api/webhooks/stripe` returning HTTP status `410 Gone`.
+- [ ] Database initialization (`app.py` lifespan / `create_all`) cleanly creates `DbUser` columns (`subscription_status`, `mor_customer_id`, `mor_subscription_id`, `subscription_expires_at`) without error on startup.
+
+### Frontend & E2E Verification
+- [ ] `./tests/verify_tests.sh` passes cleanly against the mock backend without timeouts or assertion errors, verifying that `/results` renders both the Annual Pass card and the dynamically tiered Single Job card, and that checkout navigation to `/repair/success` functions properly.
+- [ ] `frontend/src/app/results/page.tsx` and all updated frontend types/components compile cleanly with zero TypeScript or ESLint errors (`cd frontend && ./node_modules/.bin/next build`).
+

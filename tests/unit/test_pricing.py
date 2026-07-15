@@ -59,13 +59,13 @@ def test_build_recommended_parts_matches_template_part_count():
 def test_build_cost_breakdown_without_template_has_no_parts_cost():
     breakdown = build_cost_breakdown(None)
     assert breakdown["parts_total"] == 0.0
-    assert breakdown["diy_total"] == 4.00
+    assert breakdown["diy_total"] == breakdown["guide_fee"]
     assert breakdown["estimated_labor_hours"] > 0
 
 
 def test_build_cost_breakdown_diy_total_is_fee_plus_parts():
     breakdown = build_cost_breakdown(IGNITION_MISFIRE)
-    assert breakdown["diy_total"] == round(4.00 + breakdown["parts_total"], 2)
+    assert breakdown["diy_total"] == round(breakdown["guide_fee"] + breakdown["parts_total"], 2)
 
 
 def test_build_cost_breakdown_dealership_more_expensive_than_independent():

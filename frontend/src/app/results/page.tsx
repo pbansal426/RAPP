@@ -186,37 +186,30 @@ export default function ResultsPage() {
       .catch(() => { /* best-effort only -- /repair falls back to its own fetch */ });
   };
 
-  const handlePay = async () => {
+  const handlePay = async (priceType: 'single' | 'annual') => {
     setPayLoading(true);
     pregenerateRepairGuide();
     try {
       const { checkout_url, mode } = await api.post<CheckoutResponse>('/api/payments/create-checkout', {
         vin,
-        price_type: 'single',
+        price_type: priceType,
         symptoms,
       });
 
       if (mode === 'live') {
-        // A real Stripe-hosted Checkout page -- this MUST be a genuine
-        // full-page navigation. The user has to actually enter a card and
-        // complete payment there before Stripe redirects them back to our
-        // success_url; there's no session to "skip ahead" to yet.
+        // A real Checkout page hosted on Polar
         window.location.href = checkout_url;
         return;
       }
 
-      // Mock stub: a backend URL that just 303s straight back to our own
-      // success route with no real payment step in between. Doing a
-      // full-page hop to the backend here caused a blank page when the
-      // backend was slow/unreachable, so we stay in the SPA instead: pull
-      // the session id out and route straight to the success handler.
+      // Mock stub: a backend URL that just 303s straight back to our success route
       let sessionId = 'cs_test_stub';
       try {
         sessionId = new URL(checkout_url).searchParams.get('session_id') || sessionId;
       } catch {
         // checkout_url wasn't absolute — fall back to the stub session id
       }
-      router.push(`/repair/success?session_id=${encodeURIComponent(sessionId)}&vin=${encodeURIComponent(vin)}`);
+      router.push(`/repair/success?session_id=${encodeURIComponent(sessionId)}&vin=${encodeURIComponent(vin)}&price_type=${priceType}`);
     } catch {
       setPayLoading(false);
       alert('Payment service unavailable. Please try again.');
@@ -490,7 +483,7 @@ export default function ResultsPage() {
               </td>
               <td className="price-val-green" style={{ padding: '14px 16px', color: '#4ade80', fontWeight: 800 }}>
                 {diagnosis?.cost_breakdown
-                  ? `$${(diagnosis.cost_breakdown.parts_total + 4.00).toFixed(2)}`
+                  ? `$${diagnosis.cost_breakdown.diy_total.toFixed(2)}`
                   : '$39.00'}
               </td>
               <td style={{ padding: '14px 16px' }}>
@@ -501,7 +494,7 @@ export default function ResultsPage() {
                       : '2 – 3 Hours completion'}
                   </span>
                   <span className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: '0.8rem' }}>
-                    Save up to 85% today with exact step-by-step guidance & verified parts (includes $4.00 guide fee)
+                    Save up to 85% today with exact step-by-step guidance & verified parts (includes {diagnosis?.cost_breakdown ? `$${diagnosis.cost_breakdown.guide_fee.toFixed(2)}` : '$4.00'} guide fee)
                   </span>
                 </div>
               </td>
@@ -619,26 +612,106 @@ export default function ResultsPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><QualityCheckIcon size={16} style={{ color: 'var(--accent-orange)' }} /> <strong>Constant Quality Checkpoints</strong></div>
         </div>
 
-        <button
-          id="payment-cta-btn"
-          data-testid="payment-cta-btn"
-          className="btn btn-primary"
-          onClick={handlePay}
-          disabled={payLoading || loading}
-          style={{
-            maxWidth: 380,
-            margin: '0 auto',
-            minHeight: 56,
-            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-            boxShadow: '0 4px 20px rgba(217,119,6,0.3)',
-            borderRadius: '8px'
-          }}
-        >
-          {payLoading
-            ? <><span className="loading-spinner" aria-hidden="true" /> Securing Access…</>
-            : 'Unlock Complete Guide — $4.00'}
-        </button>
-        <p className="text-muted text-sm" style={{ marginTop: 12 }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: '20px',
+          maxWidth: '680px',
+          margin: '24px auto 0',
+          textAlign: 'left'
+        }}>
+          {/* Card 1: Annual Pass */}
+          <div style={{
+            background: 'rgba(30, 41, 59, 0.8)',
+            border: '2px solid var(--accent-yellow)',
+            borderRadius: '12px',
+            padding: '24px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            position: 'relative',
+            boxShadow: '0 4px 20px rgba(251, 191, 36, 0.15)'
+          }}>
+            <div style={{
+              position: 'absolute',
+              top: '-12px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'var(--accent-yellow)',
+              color: '#000',
+              padding: '2px 12px',
+              borderRadius: '12px',
+              fontSize: '0.75rem',
+              fontWeight: 800,
+              textTransform: 'uppercase',
+              whiteSpace: 'nowrap'
+            }}>
+              RECOMMENDED
+            </div>
+            <div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', marginBottom: 8 }}>⭐ Annual Pass</h3>
+              <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
+                Unlimited access to all vehicles and guides for one full year.
+              </p>
+              <div style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--accent-yellow)', marginBottom: 20 }}>
+                $19.99<span style={{ fontSize: '0.9rem', fontWeight: 500, color: '#94a3b8' }}>/yr</span>
+              </div>
+            </div>
+            <button
+              id="pay-annual-btn"
+              data-testid="pay-annual-btn"
+              className="btn btn-primary"
+              onClick={() => handlePay('annual')}
+              disabled={payLoading || loading}
+              style={{
+                width: '100%',
+                minHeight: 44,
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                borderRadius: '6px',
+                fontWeight: 700
+              }}
+            >
+              {payLoading ? <><span className="loading-spinner" aria-hidden="true" /> Securing Access…</> : 'Get Annual Pass'}
+            </button>
+          </div>
+
+          {/* Card 2: Single Unlock */}
+          <div style={{
+            background: 'rgba(15, 23, 42, 0.6)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '12px',
+            padding: '24px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between'
+          }}>
+            <div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', marginBottom: 8 }}>Single Job Unlock</h3>
+              <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
+                Lifetime access to the repair guide for this specific vehicle and symptom.
+              </p>
+              <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#fff', marginBottom: 20 }}>
+                {diagnosis?.cost_breakdown ? `$${diagnosis.cost_breakdown.guide_fee.toFixed(2)}` : '$4.00'}
+              </div>
+            </div>
+            <button
+              id="payment-cta-btn"
+              data-testid="payment-cta-btn"
+              className="btn btn-secondary"
+              onClick={() => handlePay('single')}
+              disabled={payLoading || loading}
+              style={{
+                width: '100%',
+                minHeight: 44,
+                borderRadius: '6px',
+                fontWeight: 700
+              }}
+            >
+              {payLoading ? <><span className="loading-spinner" aria-hidden="true" /> Securing Access…</> : 'Unlock Single Guide'}
+            </button>
+          </div>
+        </div>
+        <p className="text-muted text-sm" style={{ marginTop: 24 }}>
           Secure Checkout • Instant Lifetime Access • 100% Satisfaction Guarantee
         </p>
       </div>

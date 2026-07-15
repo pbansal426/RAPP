@@ -198,35 +198,28 @@ def test_success_stub_redirect_retains_all_query_params(client):
     assert "referrer=google" in location
 
 
-# 3. Test /api/webhooks/stripe with various payload structures (including malformed JSON)
-#
-# STRIPE_WEBHOOK_SECRET is unset in the test environment (see
-# backend/core/config.py's optional-secret pattern), so the real endpoint
-# correctly 503s before it ever gets to signature verification -- these
-# tests just prove that holds regardless of what payload shape is thrown
-# at it, not that a configured webhook accepts arbitrary JSON.
+# 3. Test /api/webhooks/stripe returns 410 Gone since it is deprecated.
 
 def test_webhook_valid_payload(client):
     """
-    Validate webhook returns HTTP 503 (not configured) rather than crashing
-    for standard JSON.
+    Validate webhook returns HTTP 410 (Gone) for deprecated Stripe webhook.
     """
     response = client.post("/api/webhooks/stripe", json={"id": "evt_1", "type": "checkout.session.completed"})
-    assert response.status_code == 503
+    assert response.status_code == 410
+
 
 def test_webhook_empty_payload(client):
     """
-    Validate webhook returns HTTP 503 (not configured) rather than crashing
-    for an empty body.
+    Validate webhook returns HTTP 410 (Gone) for deprecated Stripe webhook.
     """
     response = client.post("/api/webhooks/stripe")
-    assert response.status_code == 503
+    assert response.status_code == 410
+
 
 def test_webhook_malformed_json(client):
     """
-    Validate webhook returns HTTP 503 (not configured) and doesn't crash the
-    app for malformed JSON.
+    Validate webhook returns HTTP 410 (Gone) for deprecated Stripe webhook.
     """
     headers = {"Content-Type": "application/json"}
     response = client.post("/api/webhooks/stripe", content="{'invalid_json': ", headers=headers)
-    assert response.status_code == 503
+    assert response.status_code == 410

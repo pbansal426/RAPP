@@ -65,7 +65,12 @@ def get_current_user(
 
 
 def _to_user_response(user: DbUser) -> UserResponse:
-    return UserResponse(id=user.id, email=user.email, display_name=user.display_name)
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        subscription_status=user.subscription_status,
+    )
 
 
 @router.post("/request-link", response_model=RequestLinkResponse)

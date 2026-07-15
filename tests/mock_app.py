@@ -389,9 +389,21 @@ async def results():
             <p>Please unlock to view steps.</p>
         </div>
         
-        <button data-testid="payment-cta-btn" id="payment-cta-btn" style="display: {cta_display}; height: {btn_height};">
-            Unlock Repair Steps
-        </button>
+        <!-- Dual-Card UI -->
+        <div style="display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;">
+            <div style="border: 2px solid yellow; padding: 15px; border-radius: 8px;">
+                <h3>⭐ Annual Pass</h3>
+                <p>$19.99/yr</p>
+                <button data-testid="pay-annual-btn" id="pay-annual-btn" style="height: {btn_height};">Get Annual Pass</button>
+            </div>
+            <div style="border: 1px solid #ccc; padding: 15px; border-radius: 8px;">
+                <h3>Single Unlock</h3>
+                <p>$4.99</p>
+                <button data-testid="payment-cta-btn" id="payment-cta-btn" style="display: {cta_display}; height: {btn_height};">
+                    Unlock Single Guide
+                </button>
+            </div>
+        </div>
     </div>
     <script>
         const symptoms = localStorage.getItem('rapp_symptoms') || '';
@@ -414,6 +426,18 @@ async def results():
                     return;
                 }}
                 window.location.href = '/repair/success?session_id=cs_test_123&vin=' + vin;
+            }});
+        }}
+        const annualBtn = document.getElementById('pay-annual-btn');
+        if (annualBtn) {{
+            annualBtn.addEventListener('click', () => {{
+                const vin = localStorage.getItem('rapp_vin');
+                if (!vin) {{
+                    alert("Error: No VIN found in state.");
+                    return;
+                }}
+                localStorage.setItem('rapp_user_subscription_status', 'active');
+                window.location.href = '/repair/success?session_id=cs_test_annual&vin=' + vin;
             }});
         }}
     </script>
@@ -477,7 +501,8 @@ async def repair():
             console.error("No VIN in state");
         } else {
             const isUnlocked = localStorage.getItem('rapp_unlocked_' + vin);
-            if (isUnlocked) {
+            const isSubscriber = localStorage.getItem('rapp_user_subscription_status') === 'active';
+            if (isUnlocked || isSubscriber) {
                 document.getElementById('detailed-repair-steps').style.display = 'block';
                 document.getElementById('rag-citation').style.display = 'block';
             }

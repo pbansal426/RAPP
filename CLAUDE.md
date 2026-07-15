@@ -6,6 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 RAPP — Automotive AI Repair Engine. Converts VIN + symptoms/OBD-II codes into tool-constrained, RAG-verified repair instructions. FastAPI backend (`backend/`), Next.js 14 App Router frontend (`frontend/`, TypeScript, pnpm, vanilla CSS — no Tailwind). Specs live in `ORIGINAL_REQUEST.md`, `PHASE_1_SPEC.md`, and `product_evolution_spec.md`; acceptance criteria in `ORIGINAL_REQUEST.md` are the source of truth for what must keep working.
 
+## 🤖 MANDATORY AI AGENT PROTOCOL (EXECUTION & LOGGING)
+
+Every AI agent (Claude Code, Antigravity, Jules, or general Gemini instances) working in this repository **MUST strictly adhere to this 3-step operational protocol**:
+
+1. **Step 1: Session Initialization (Read-First Rule)**
+   - Before writing or modifying any code, read [`docs/implementation/imp.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/imp.md) to identify the active implementation stage and priority items.
+   - You MUST work **strictly within the active phase/stage**. Do not jump to Stage 2 or Stage 3 tasks if Stage 1 items are pending or unverified.
+   - Check existing architectural boundaries in `CLAUDE.md` (`## Architecture` and `## Pinned contract`).
+
+2. **Step 2: Strict Plan Adherence & Zero Silent Drift**
+   - Follow the step-by-step specifications defined in [`docs/implementation/imp.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/imp.md).
+   - If you discover a technical blocker, scope issue, or reason why a planned task cannot/should not be executed as written, **DO NOT silently skip, downgrade, or alter the feature**. Instead, stop, explain the trade-off clearly to the user, and use the `/log-decision` workflow (see [`docs/UPDATED_PRODUCT_NORTH_STAR.md`](file:///Users/prathambansal/dev/rapp/docs/UPDATED_PRODUCT_NORTH_STAR.md) Section 12) to formally document the pivot.
+
+3. **Step 3: Session Termination & Document Updates**
+   - At the conclusion of your turn or when finishing any **Master Task Block**, you **MUST** update all core tracking documents:
+     - **`docs/implementation/imp.md`**: Check off completed tasks (`[x]`), update the progress percentage table, and append a new entry to **Section 6: Active Execution Log & AI Session Audit Trail** documenting: date/timestamp, your agent model (`Claude Opus 5`, `Sonnet`, etc.), exact files changed, tests executed/results, and precise handoff status for the next block.
+     - **`docs/UPDATED_PRODUCT_NORTH_STAR.md`**: If any structural decision or pricing/schema change occurred during the block, append it to **Section 12: Architectural & Product Decision Log** per the `/log-decision` workflow.
+     - **`docs/MODEL_ASSIGNMENT_GUIDE.md`**: Mark the completed Task Block (`Block 1`, `Block 2`, etc.) as ✅ **COMPLETED** in the Master Cheat Sheet table so the human owner always knows exactly which blocks remain.
+
 ## Commands
 
 Backend dependency management is `uv` (Astral) — no more Poetry, no more manually-managed `.venv`. `uv run <cmd>` resolves the lockfile (`uv.lock`) and executes inside the project's venv on the fly; `uv sync --all-groups` installs/updates it explicitly. Use `./node_modules/.bin/` for Next.js:

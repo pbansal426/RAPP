@@ -1,35 +1,34 @@
-# BRIEFING — 2026-07-03T06:54:03Z
+# BRIEFING — 2026-07-15T08:55:52Z
 
 ## Mission
-Execute Phase 2 of RAPP redesign, transforming the frontend into a trustworthy, professional automotive engineering platform with a Deep Industrial Navy design system, cascading vehicle selector, isolated OBD-II diagnostic tooling, and affiliate garage vault.
+Implement Combined Task Block 1: Payment & Monetization Overhaul (Stages 1.3 & 1.4 Combined) for the RAPP Automotive AI Repair Engine.
 
 ## 🔒 My Identity
 - Archetype: sentinel
 - Working directory: /Users/prathambansal/Dev/RAPP/.agents/sentinel
-- Orchestrator: 75d7f2e4-8897-456e-b1d1-e6bb176c5bfc
-- Victory Auditor: TBD
+- Orchestrator: 5d745868-06f5-4452-bde3-ebed81feea9e
+- Victory Auditor: bfa6e949-8e5e-4e26-b6b6-6dfc42bbf9ce
 
 ## 🔒 Key Constraints
 - No technical decisions — relay only
 - Victory Audit is MANDATORY before reporting completion
-- Preserve existing data-testid and localStorage keys
-- Firebase SDK must only be initialized client-side in Next.js
-- Apply Deep Industrial Navy Design System (#0F172A, charcoal cards, #F97316 accents)
-- Maintain all core interactive UI flows (4-step selector, OBD-II tags, tool filters, sign-up modal) without console errors
+- Replace raw Stripe with Polar Merchant-of-Record (MoR) and signature verification
+- Dynamic tier price calculation ($4.99 / $9.99 / $14.99)
+- Dual-card checkout UI (Annual Pass vs. Single Job Unlock) on results page
 
 ## User Context
-- **Last user request**: Execute Phase 2 of the RAPP redesign with Deep Industrial Navy Design System, cascading 4-step vehicle selector, isolated OBD-II diagnostic tooling, and affiliate parts dashboard / garage vault.
+- **Last user request**: Implement Combined Task Block 1: Payment & Monetization Overhaul.
 - **Pending clarifications**: none
 - **Delivered results**: none
 
 ## Project Status
-- **Phase**: in progress
+- **Phase**: auditing
 
 ## Victory Audit Status
-- **Triggered**: no
+- **Triggered**: yes
 - **Verdict**: pending
 - **Retry count**: 0
 
 ## Artifact Index
-- /Users/prathambansal/Dev/RAPP/ORIGINAL_REQUEST.md — Verbatim user request record
+- /Users/prathambansal/Dev/RAPP/.agents/ORIGINAL_REQUEST.md — Verbatim user request record
 - /Users/prathambansal/Dev/RAPP/.agents/sentinel/BRIEFING.md — Memory briefing

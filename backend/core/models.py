@@ -25,6 +25,12 @@ class DbUser(Base):
     display_name: Mapped[str | None] = mapped_column(default=None)
     saved_payment_method: Mapped[bool] = mapped_column(default=False)
     last_payment_session_id: Mapped[str | None] = mapped_column(default=None)
+    subscription_status: Mapped[str] = mapped_column(
+        default="free"
+    )  # "free", "active", "cancelled", "expired"
+    mor_customer_id: Mapped[str | None] = mapped_column(default=None)
+    mor_subscription_id: Mapped[str | None] = mapped_column(default=None)
+    subscription_expires_at: Mapped[datetime | None] = mapped_column(default=None)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     repairs: Mapped[list["DbSavedRepair"]] = relationship(
@@ -67,3 +73,40 @@ class UsedVerifyToken(Base):
 
     jti: Mapped[str] = mapped_column(primary_key=True)
     used_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+
+class DbChatUsage(Base):
+    """Tracks server-side AI chat usage per payment session / job unlock.
+
+    Enforces the hard 5-reply cap on live LLM queries per job (`imp.md` Stage 1.1).
+    Once `message_count >= 5`, `POST /api/repair/chat` returns HTTP 429.
+    """
+
+    __tablename__ = "chat_usages"
+
+    stripe_session_id: Mapped[str] = mapped_column(primary_key=True, index=True)
+    message_count: Mapped[int] = mapped_column(default=0)
+    last_message_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+
+class DbGuideUnlock(Base):
+    """Server-side proof that a checkout session paid to unlock a VIN's guide.
+
+    Written by the payments webhook (live Polar checkouts) and the mock
+    success-stub (dev/test checkouts) when a single-incident purchase
+    completes. `POST /api/repair` / `/api/repair/chat` check this instead of
+    trusting any non-empty client-supplied `stripe_session_id` string -- that
+    was the "coupling unlocks exclusively to ephemeral client localStorage"
+    flaw `imp.md` Stage 1.3/1.4 calls out. Deliberately not folded into
+    `DbSavedRepair`: that table requires a non-null `user_id` and `symptoms`
+    for the user-facing garage feature, but a checkout can complete while
+    logged out and before any guide has been generated to save.
+    """
+
+    __tablename__ = "guide_unlocks"
+
+    session_id: Mapped[str] = mapped_column(primary_key=True, index=True)
+    vin: Mapped[str] = mapped_column(index=True)
+    user_id: Mapped[str | None] = mapped_column(default=None)
+    price_type: Mapped[str | None] = mapped_column(default=None)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)

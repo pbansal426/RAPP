@@ -134,15 +134,27 @@ def build_recommended_parts(
     return recommended
 
 
+def estimate_pricing(category: str | None, dealership_cost: float) -> float:
+    """Estimate pricing tier based on dealership cost."""
+    if dealership_cost < 150.0:
+        return 4.99
+    elif dealership_cost <= 600.0:
+        return 9.99
+    else:
+        return 14.99
+
+
 def build_cost_breakdown(template: RepairTemplate | None) -> dict[str, Any]:
     if template:
         parts_total = round(sum(parse_part_price(p)[1] for p in template.parts), 2)
         labor_hours = _LABOR_HOURS_BY_CATEGORY.get(
             template.category, _DEFAULT_LABOR_HOURS
         )
+        category = template.category
     else:
         parts_total = 0.0
         labor_hours = 1.0  # baseline diagnostic-only labor estimate
+        category = None
 
     dealer_rate_low, dealer_rate_high = _DEALERSHIP_LABOR_RATE
     indep_rate_low, indep_rate_high = _INDEPENDENT_LABOR_RATE
@@ -161,12 +173,15 @@ def build_cost_breakdown(template: RepairTemplate | None) -> dict[str, Any]:
     independent_high = round(
         parts_total * indep_markup_high + labor_hours * indep_rate_high, 2
     )
-    diy_total = round(_RAPP_GUIDE_FEE + parts_total, 2)
+
+    guide_fee = estimate_pricing(category, dealership_high)
+    diy_total = round(guide_fee + parts_total, 2)
 
     return {
         "dealership_cost_range": [dealership_low, dealership_high],
         "independent_shop_range": [independent_low, independent_high],
         "parts_total": parts_total,
+        "guide_fee": guide_fee,
         "diy_total": diy_total,
         "estimated_labor_hours": labor_hours,
     }
