@@ -203,3 +203,146 @@ async def extract_vin_via_gemini(
     except Exception as e:
         logger.warning("Gemini VIN OCR call failed", error=str(e))
     return None
+
+
+# ---------------------------------------------------------------------------
+# Stage 2.4 – Mid-Repair Photo Checkpoint Vision
+# ---------------------------------------------------------------------------
+
+
+class CheckpointVerification(BaseModel):
+    """Gemini structured-output schema for repair milestone photo verification."""
+
+    is_milestone_met: bool
+    confidence: float
+    explanation: str
+
+
+_CHECKPOINT_SYSTEM_PROMPT = (
+    "You are an expert automotive technician reviewing a photo taken mid-repair. "
+    "Your job is to determine whether the physical state shown in the image correctly "
+    "matches the described repair step or milestone. Evaluate bolt fitment, part "
+    "orientation, connector seating, gasket alignment, or any other visible detail "
+    "relevant to the step. Return is_milestone_met=true only when you are confident "
+    "the work shown is correct and safe to proceed from. If the photo is blurry, "
+    "dark, or ambiguous, set confidence below 0.5 and explain what could not be "
+    "confirmed."
+)
+
+
+async def verify_checkpoint_via_gemini(
+    image_bytes: bytes,
+    mime_type: str,
+    step_description: str,
+) -> CheckpointVerification | None:
+    """Use Gemini vision to verify a mid-repair photo against a step description.
+
+    Returns a structured CheckpointVerification (is_milestone_met, confidence,
+    explanation), or None when the client is not configured or the call fails.
+    Raises GeminiRateLimitError on quota exhaustion (HTTP 429) so the caller
+    can distinguish a quota problem from an unverifiable image.
+    """
+    client = get_genai_client()
+    if not client:
+        return None
+    try:
+        image_part = genai_types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+        text_part = genai_types.Part.from_text(
+            text=f"Repair step to verify: {step_description}"
+        )
+        response = await client.aio.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[image_part, text_part],  # type: ignore[arg-type]
+            config=genai_types.GenerateContentConfig(
+                system_instruction=_CHECKPOINT_SYSTEM_PROMPT,
+                temperature=0.0,
+                response_mime_type="application/json",
+                response_schema=CheckpointVerification,
+            ),
+        )
+        parsed = response.parsed
+        if not isinstance(parsed, CheckpointVerification):
+            return None
+        return parsed
+    except genai_errors.APIError as e:
+        if e.code == 429:
+            logger.warning("Gemini checkpoint-verify call rate-limited", error=str(e))
+            raise GeminiRateLimitError(str(e)) from e
+        logger.warning("Gemini checkpoint-verify call failed", error=str(e))
+    except Exception as e:
+        logger.warning("Gemini checkpoint-verify call failed", error=str(e))
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Stage 2.6 – "Check My ChatGPT Answer" Verification Funnel
+# ---------------------------------------------------------------------------
+
+
+class ExternalAiVerificationSchema(BaseModel):
+    """Gemini structured-output schema for external-AI-text fact-checking."""
+
+    verified_claims: list[str]
+    fitment_or_spec_errors: list[str]
+    missing_safety_warnings: list[str]
+    accuracy_score: int  # 0–100
+
+
+_EXTERNAL_AI_SYSTEM_PROMPT = (
+    "You are a senior master automotive technician and technical writer with access "
+    "to OEM factory service manuals and NHTSA Technical Service Bulletins. "
+    "A user will give you advice they received from an AI chatbot (e.g. ChatGPT), "
+    "along with official context retrieved from our database. Your task is to "
+    "fact-check the advice strictly against the provided OEM context, NOT against "
+    "general knowledge. For each claim in the external advice: mark it as verified "
+    "if it matches the OEM context, list it as a fitment_or_spec_error if it "
+    "contains a wrong torque spec, incorrect part number, or wrong sequence, or "
+    "as a missing_safety_warning if it omits SRS, fuel-line, or HV precautions. "
+    "Return accuracy_score as an integer 0–100 reflecting overall factual quality. "
+    "Be factual, terse, and never hallucinate TSB numbers."
+)
+
+
+async def call_gemini_verify_external(
+    external_ai_text: str,
+    rag_context: str,
+    symptoms: str,
+) -> ExternalAiVerificationSchema | None:
+    """Fact-check `external_ai_text` against `rag_context` (OEM / TSB snippets).
+
+    Returns a structured scorecard or None if the Gemini client is unavailable
+    or the call fails.
+    """
+    client = get_genai_client()
+    if not client:
+        return None
+
+    prompt = (
+        f"Vehicle symptoms: {symptoms}\n\n"
+        f"OEM/TSB reference context:\n{rag_context}\n\n"
+        f"External AI advice to fact-check:\n{external_ai_text}"
+    )
+
+    try:
+        response = await client.aio.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=genai_types.GenerateContentConfig(
+                system_instruction=_EXTERNAL_AI_SYSTEM_PROMPT,
+                temperature=0.1,
+                response_mime_type="application/json",
+                response_schema=ExternalAiVerificationSchema,
+            ),
+        )
+        parsed = response.parsed
+        if not isinstance(parsed, ExternalAiVerificationSchema):
+            return None
+        return parsed
+    except genai_errors.APIError as e:
+        if e.code == 429:
+            logger.warning("Gemini verify-external call rate-limited", error=str(e))
+            raise GeminiRateLimitError(str(e)) from e
+        logger.warning("Gemini verify-external call failed", error=str(e))
+    except Exception as e:
+        logger.warning("Gemini verify-external call failed", error=str(e))
+    return None

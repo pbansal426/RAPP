@@ -3,20 +3,32 @@
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    UploadFile,
+    status,
+)
 from sqlalchemy.orm import Session
 
+from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.models import DbChatUsage, DbGuideUnlock, DbUser
 from backend.core.security import decode_token
 from backend.routers.diagnose import check_high_risk
-from backend.routers.vin import decode_vin_internal
+from backend.routers.vin import _normalize_image_for_vision, decode_vin_internal
 from backend.schemas import (
+    CheckpointVerifyResponse,
     RepairChatRequest,
     RepairChatResponse,
     RepairRequest,
     RepairResponse,
 )
+from backend.services.gemini import GeminiRateLimitError, verify_checkpoint_via_gemini
 from backend.services.llm import generate_chat_reply, generate_repair_procedure
 
 router = APIRouter()
@@ -262,3 +274,91 @@ async def repair_chat(
         db.commit()
 
     return RepairChatResponse(reply=reply)
+
+
+# ---------------------------------------------------------------------------
+# Stage 2.4 – Mid-Repair Photo Checkpoint Pipeline
+# ---------------------------------------------------------------------------
+
+_CHECKPOINT_ALLOWED_CONTENT_TYPES = {
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+}
+_CHECKPOINT_ALLOWED_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif")
+_CHECKPOINT_MAX_BYTES = 20 * 1024 * 1024  # 20 MB
+
+
+@router.post("/api/repair/checkpoint/verify", response_model=CheckpointVerifyResponse)
+async def checkpoint_verify(
+    file: UploadFile = File(...),
+    step_description: str = Form(...),
+) -> CheckpointVerifyResponse:
+    """Verify a mid-repair milestone photo against the described repair step.
+
+    Accepts a multipart upload (JPEG / PNG / WEBP / HEIC) and a step_description
+    form field. The image is normalised to ≤2048 px JPEG via the shared
+    _normalize_image_for_vision pipeline before being sent to Gemini vision.
+
+    Returns CheckpointVerifyResponse with is_milestone_met, confidence (0–1),
+    and a plain-English explanation.
+    """
+    content_type = (file.content_type or "").lower()
+    filename = (file.filename or "").lower()
+    ext_ok = filename.endswith(_CHECKPOINT_ALLOWED_EXTENSIONS)
+
+    if content_type not in _CHECKPOINT_ALLOWED_CONTENT_TYPES and not ext_ok:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported image type. Use JPEG, PNG, WEBP, or HEIC.",
+        )
+
+    image_bytes = await file.read()
+    if not image_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty.",
+        )
+    if len(image_bytes) > _CHECKPOINT_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image too large (max 20 MB).",
+        )
+
+    if not settings.gemini_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Photo verification is temporarily unavailable. Continue to the next step manually.",
+        )
+
+    # Normalise to ≤2048 px JPEG so Gemini can ingest HEIC/PNG from phones.
+    normalised_bytes, vision_mime = _normalize_image_for_vision(
+        image_bytes, content_type, filename
+    )
+
+    try:
+        result = await verify_checkpoint_via_gemini(
+            image_bytes=normalised_bytes,
+            mime_type=vision_mime,
+            step_description=step_description,
+        )
+    except GeminiRateLimitError as err:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Photo verification has hit its usage limit. Try again shortly, or continue manually.",
+        ) from err
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Could not evaluate the photo. Try a clearer, well-lit image of the repair area.",
+        )
+
+    return CheckpointVerifyResponse(
+        is_milestone_met=result.is_milestone_met,
+        confidence=result.confidence,
+        explanation=result.explanation,
+    )

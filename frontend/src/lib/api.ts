@@ -34,6 +34,26 @@ export const api = {
     request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  /** Multipart FormData upload -- does NOT set Content-Type (browser supplies
+   *  the boundary). Auth header is still injected automatically. */
+  postForm: <T>(path: string, form: FormData): Promise<T> => {
+    const token =
+      typeof window !== 'undefined' ? localStorage.getItem('rapp_token') : null;
+    const headers: Record<string, string> = token
+      ? { Authorization: `Bearer ${token}` }
+      : {};
+    return fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      body: form,
+      headers,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: res.statusText }));
+        throw new ApiError(res.status, body.error ?? res.statusText);
+      }
+      return res.json() as Promise<T>;
+    });
+  },
 };
 
 export { ApiError };

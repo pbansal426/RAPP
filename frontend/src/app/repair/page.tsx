@@ -15,6 +15,7 @@ import type { RecommendedPart, VehicleInfo } from '@/lib/types';
 import {
   AppLogoMarkIcon,
   BoltIcon,
+  CameraIcon,
   WrenchIcon,
   QualityCheckIcon,
   ShieldAlertIcon,
@@ -30,6 +31,19 @@ interface RepairResponse {
   is_blocked_safety?: boolean;
   warning_message?: string | null;
 }
+
+interface CheckpointResult {
+  is_milestone_met: boolean;
+  confidence: number;
+  explanation: string;
+}
+
+type CheckpointState =
+  | { status: 'idle' }
+  | { status: 'open' }
+  | { status: 'verifying' }
+  | { status: 'done'; result: CheckpointResult }
+  | { status: 'error'; message: string };
 
 const TORQUE_REGEX = /torque|tighten|ft-lbs|\bnm\b/i;
 const WIRING_REGEX = /wiring|harness|connector|\bpin\b|sensor|circuit/i;
@@ -58,6 +72,32 @@ export default function RepairPage() {
   const conclusionRef = useRef<HTMLDivElement>(null);
   const { user: authUser, loading: authLoading } = useAuthUser();
   const [currentSkillLevel, setCurrentSkillLevel] = useState<string>('Beginner');
+  // Stage 2.4: per-step photo checkpoint state keyed by step index
+  const [checkpointStates, setCheckpointStates] = useState<Record<number, CheckpointState>>({});
+  const checkpointFileRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
+  const setCheckpoint = (idx: number, state: CheckpointState) =>
+    setCheckpointStates((prev) => ({ ...prev, [idx]: state }));
+
+  const verifyCheckpoint = async (idx: number, stepText: string, file: File) => {
+    setCheckpoint(idx, { status: 'verifying' });
+    const form = new FormData();
+    form.append('file', file);
+    form.append('step_description', stepText);
+    try {
+      const result = await api.postForm<CheckpointResult>(
+        '/api/repair/checkpoint/verify',
+        form
+      );
+      setCheckpoint(idx, { status: 'done', result });
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : 'Verification failed. Try a clearer photo.';
+      setCheckpoint(idx, { status: 'error', message: msg });
+    }
+  };
 
   const generateAndCache = (
     storedVin: string,

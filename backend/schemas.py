@@ -307,3 +307,33 @@ class ComplaintsSummaryResponse(BaseModel):
     # Sorted by count descending, capped to a handful -- a full per-complaint
     # breakdown isn't useful in a summary card.
     top_components: list[ComplaintComponentFrequency]
+
+
+# --- Stage 2.4: Mid-Repair Photo Checkpoint Pipeline ---
+# Response shape for POST /api/repair/checkpoint/verify.
+# is_milestone_met=True means Gemini vision confirmed the physical work
+# matches the step description; confidence is 0.0–1.0; explanation gives the
+# user a plain-English reason, e.g. "Belt routing aligns with all four pulleys."
+
+
+class CheckpointVerifyResponse(BaseModel):
+    is_milestone_met: bool
+    confidence: float
+    explanation: str
+
+
+# --- Stage 2.6: "Check My ChatGPT Answer" Verification Funnel ---
+# Schemas for POST /api/diagnose/verify-external.
+
+
+class ExternalAiVerifyRequest(BaseModel):
+    vin: str
+    symptoms: str
+    external_ai_text: str
+
+
+class ExternalAiVerifyResponse(BaseModel):
+    verified_claims: list[str]
+    fitment_or_spec_errors: list[str]  # wrong torque specs, wrong part numbers, etc.
+    missing_safety_warnings: list[str]  # e.g. missed SRS or fuel-line depressurisation
+    accuracy_score: int  # 0–100

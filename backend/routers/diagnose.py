@@ -1,10 +1,19 @@
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 
 from backend.core.config import settings
-from backend.schemas import DiagnoseRequest, DiagnoseResponse
-from backend.services.gemini import call_gemini_text
+from backend.schemas import (
+    DiagnoseRequest,
+    DiagnoseResponse,
+    ExternalAiVerifyRequest,
+    ExternalAiVerifyResponse,
+)
+from backend.services.gemini import (
+    GeminiRateLimitError,
+    call_gemini_text,
+    call_gemini_verify_external,
+)
 from backend.services.llm import generate_diagnosis_summary, refine_brake_category
 
 router = APIRouter()
@@ -137,4 +146,88 @@ async def diagnose(request: DiagnoseRequest) -> DiagnoseResponse:
         warning_message=warning_message,
         recommended_parts=build_recommended_parts(template, vehicle_desc),  # type: ignore
         cost_breakdown=build_cost_breakdown(template),  # type: ignore
+    )
+
+
+# ---------------------------------------------------------------------------
+# Stage 2.6 – "Check My ChatGPT Answer" Verification Funnel
+# ---------------------------------------------------------------------------
+
+
+@router.post("/api/diagnose/verify-external", response_model=ExternalAiVerifyResponse)
+async def verify_external(request: ExternalAiVerifyRequest) -> ExternalAiVerifyResponse:
+    """Fact-check third-party AI repair advice against RAPP's OEM/TSB database.
+
+    Retrieves vehicle-specific context (Technical Service Bulletins, OEM specs)
+    from the Chroma DB vector store, then asks Gemini to compare the
+    `external_ai_text` against that ground truth. Returns a structured scorecard
+    with verified_claims, fitment_or_spec_errors, missing_safety_warnings, and
+    an accuracy_score (0-100).
+
+    When Gemini is unavailable (no API key / test mode) the endpoint still
+    returns a valid response with accuracy_score=50 and a clear degraded-mode
+    flag so the frontend can display a helpful message instead of erroring.
+    """
+    from backend.services.rag import retrieve
+
+    # Build a minimal vin_meta from the request (no VIN-decode network call needed
+    # here -- we only need make/model if provided; the VIN itself is sufficient
+    # for ChromaDB metadata filtering).
+    vin_meta: dict[str, Any] = {"vin": request.vin.strip().upper()}
+
+    query = f"{request.symptoms} {request.external_ai_text[:300]}"
+    results = retrieve(query=query, vin_meta=vin_meta, k=8) or []
+
+    # Serialise retrieved TSB/OEM chunks to a compact plain-text block.
+    rag_context_parts: list[str] = []
+    for doc in results:
+        text = doc.get("text", "").strip()
+        source = doc.get("source", "")
+        if text:
+            rag_context_parts.append(f"[{source}] {text}" if source else text)
+    rag_context = (
+        "\n\n".join(rag_context_parts)
+        if rag_context_parts
+        else "(No OEM context retrieved for this vehicle/symptom combination.)"
+    )
+
+    # Graceful degraded-mode when no Gemini key is configured.
+    if not settings.gemini_api_key:
+        return ExternalAiVerifyResponse(
+            verified_claims=[],
+            fitment_or_spec_errors=[],
+            missing_safety_warnings=[
+                "AI verification is temporarily unavailable — Gemini API key not configured."
+            ],
+            accuracy_score=50,
+        )
+
+    try:
+        result = await call_gemini_verify_external(
+            external_ai_text=request.external_ai_text,
+            rag_context=rag_context,
+            symptoms=request.symptoms,
+        )
+    except GeminiRateLimitError as err:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="AI verification has hit its usage limit. Please try again shortly.",
+        ) from err
+
+    if result is None:
+        # Gemini call failed but did not raise — return degraded response.
+        return ExternalAiVerifyResponse(
+            verified_claims=[],
+            fitment_or_spec_errors=[],
+            missing_safety_warnings=[
+                "AI verification is temporarily unavailable. Please try again later."
+            ],
+            accuracy_score=50,
+        )
+
+    return ExternalAiVerifyResponse(
+        verified_claims=result.verified_claims,
+        fitment_or_spec_errors=result.fitment_or_spec_errors,
+        missing_safety_warnings=result.missing_safety_warnings,
+        accuracy_score=result.accuracy_score,
     )
