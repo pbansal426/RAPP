@@ -82,6 +82,8 @@ export interface DiagnosisResponse {
 export interface RepairResponse {
   repair_steps: string[];
   citations: string[];
+  is_blocked_safety?: boolean;
+  warning_message?: string | null;
 }
 
 /** POST /api/repair/chat request. repair_steps is the exact procedure

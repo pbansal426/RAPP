@@ -60,6 +60,7 @@ export default function ResultsPage() {
   const [loading, setLoading] = useState(true);
   const [payLoading, setPayLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [agreeTerms, setAgreeTerms] = useState(false);
 
   const [ownedTools, setOwnedTools] = useState<string[]>([]);
   const { user: authUser } = useAuthUser();
@@ -613,6 +614,36 @@ export default function ResultsPage() {
         </div>
 
         <div style={{
+          maxWidth: '680px',
+          margin: '24px auto 0',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '10px',
+          background: 'rgba(255,255,255,0.02)',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          border: '1px solid rgba(255,255,255,0.08)'
+        }}>
+          <input
+            id="agree-terms-checkbox"
+            data-testid="agree-terms-checkbox"
+            type="checkbox"
+            checked={agreeTerms}
+            onChange={(e) => setAgreeTerms(e.target.checked)}
+            style={{
+              marginTop: '4px',
+              width: '18px',
+              height: '18px',
+              cursor: 'pointer',
+              accentColor: 'var(--accent-orange)'
+            }}
+          />
+          <label htmlFor="agree-terms-checkbox" style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', cursor: 'pointer', lineHeight: '1.4' }}>
+            I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-yellow)', textDecoration: 'underline', fontWeight: 600 }}>Terms of Service</a> and understand that automotive repair involves inherent physical and financial risk.
+          </label>
+        </div>
+
+        <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
           gap: '20px',
@@ -662,13 +693,14 @@ export default function ResultsPage() {
               data-testid="pay-annual-btn"
               className="btn btn-primary"
               onClick={() => handlePay('annual')}
-              disabled={payLoading || loading}
+              disabled={payLoading || loading || !agreeTerms}
               style={{
                 width: '100%',
                 minHeight: 44,
                 background: 'linear-gradient(135deg, #f59e0b, #d97706)',
                 borderRadius: '6px',
-                fontWeight: 700
+                fontWeight: 700,
+                opacity: (payLoading || loading || !agreeTerms) ? 0.6 : 1
               }}
             >
               {payLoading ? <><span className="loading-spinner" aria-hidden="true" /> Securing Access…</> : 'Get Annual Pass'}
@@ -699,12 +731,13 @@ export default function ResultsPage() {
               data-testid="payment-cta-btn"
               className="btn btn-secondary"
               onClick={() => handlePay('single')}
-              disabled={payLoading || loading}
+              disabled={payLoading || loading || !agreeTerms}
               style={{
                 width: '100%',
                 minHeight: 44,
                 borderRadius: '6px',
-                fontWeight: 700
+                fontWeight: 700,
+                opacity: (payLoading || loading || !agreeTerms) ? 0.6 : 1
               }}
             >
               {payLoading ? <><span className="loading-spinner" aria-hidden="true" /> Securing Access…</> : 'Unlock Single Guide'}

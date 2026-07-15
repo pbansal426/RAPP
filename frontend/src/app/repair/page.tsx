@@ -10,7 +10,7 @@ import ConclusionPhase from './ConclusionPhase';
 import SaveGuidePrompt from './SaveGuidePrompt';
 import { useAuthUser } from '@/lib/auth';
 import { completePendingSave } from '@/lib/pendingSave';
-import type { RecommendedPart } from '@/lib/types';
+import type { RecommendedPart, VehicleInfo } from '@/lib/types';
 import {
   AppLogoMarkIcon,
   BoltIcon,
@@ -26,6 +26,8 @@ import {
 interface RepairResponse {
   repair_steps: string[];
   citations: string[];
+  is_blocked_safety?: boolean;
+  warning_message?: string | null;
 }
 
 const TORQUE_REGEX = /torque|tighten|ft-lbs|\bnm\b/i;
@@ -34,7 +36,8 @@ const WIRING_REGEX = /wiring|harness|connector|\bpin\b|sensor|circuit/i;
 export default function RepairPage() {
   const router = useRouter();
   const [vin, setVin] = useState('');
-  const [vinData, setVinData] = useState<Record<string, unknown> | null>(null);
+  const [vinData, setVinData] = useState<VehicleInfo | null>(null);
+
   const [symptoms, setSymptoms] = useState('');
   const [repair, setRepair] = useState<RepairResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,7 +56,7 @@ export default function RepairPage() {
     storedSymptoms: string,
     tools: string[],
     sessionId: string,
-    parsedVinData: Record<string, unknown> | null
+    parsedVinData: VehicleInfo | null
   ) => {
     setLoading(true);
     api.post<RepairResponse>('/api/repair', {
@@ -249,267 +252,338 @@ export default function RepairPage() {
         )}
 
         {repair && (
-          <>
-            {/* Shopping & Parts List Card */}
-            <div className="card">
-              <p className="card-label">Required Parts &amp; Supplies</p>
-              <table className="price-table" style={{ margin: '10px 0 0' }}>
-                <thead>
-                  <tr>
-                    <th>Part / Supply Specification</th>
-                    <th>Est. Retail</th>
-                    <th>Availability</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {parts.length === 0 && (
+          repair.is_blocked_safety ? (
+            <div
+              className="card border-red-500 bg-red-950 text-red-500"
+              style={{
+                padding: '32px 24px',
+                borderLeft: '4px solid var(--accent-red)',
+                marginTop: '16px',
+                border: '2px solid var(--accent-red)',
+                borderRadius: '8px'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <ShieldAlertIcon size={24} style={{ color: 'var(--accent-red)' }} />
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0, color: '#fff' }}>
+                  Professional Service Required
+                </h2>
+              </div>
+              <p style={{ fontSize: '1.05rem', lineHeight: 1.6, color: 'var(--text-primary)', marginBottom: 20 }}>
+                {repair.warning_message || 'DANGER: A safety-critical system has been detected. Step-by-step DIY repair generation is blocked for your physical safety.'}
+              </p>
+              
+              <div style={{ background: 'rgba(0,0,0,0.2)', padding: 18, borderRadius: 8, marginBottom: 12 }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff', marginBottom: 12 }}>
+                  Certified Local Repair Directory
+                </h3>
+                <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
+                  For high-risk systems, we strongly recommend booking a certified technician. Use the resources below to locate verified shops near you:
+                </p>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <a
+                    href={`https://repairpal.com/repair-shops?make=${encodeURIComponent(vinData?.make || '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-primary"
+                    style={{
+                      width: 'auto',
+                      padding: '10px 20px',
+                      background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                      border: 'none',
+                      color: '#fff',
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontWeight: 700
+                    }}
+                  >
+                    Find Shops on RepairPal ↗
+                  </a>
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((vinData?.make || '') + ' certified auto repair near me')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-secondary"
+                    style={{
+                      width: 'auto',
+                      padding: '10px 20px',
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontWeight: 700
+                    }}
+                  >
+                    Search Google Maps ↗
+                  </a>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Shopping & Parts List Card */}
+              <div className="card">
+                <p className="card-label">Required Parts &amp; Supplies</p>
+                <table className="price-table" style={{ margin: '10px 0 0' }}>
+                  <thead>
                     <tr>
-                      <td colSpan={3} className="text-muted text-sm">
-                        No specific replacement part was identified from your symptoms — see the step-by-step procedure below for part call-outs.
-                      </td>
+                      <th>Part / Supply Specification</th>
+                      <th>Est. Retail</th>
+                      <th>Availability</th>
                     </tr>
-                  )}
-                  {parts.map((part, i) => {
-                    const prices = part.options.map((o) => o.estimated_price);
-                    const min = Math.min(...prices);
-                    const max = Math.max(...prices);
-                    const budget = part.options.find((o) => o.tier === 'Aftermarket / Budget') ?? part.options[0];
-                    return (
-                      <tr key={i}>
-                        <td>{part.part_name}</td>
-                        <td className="price-val-green">
-                          {min === max ? `$${min.toFixed(2)}` : `$${min.toFixed(2)} – $${max.toFixed(2)}`}
-                        </td>
-                        <td>
-                          {budget ? (
-                            <a
-                              href={budget.purchase_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ color: 'var(--accent-yellow)', textDecoration: 'none' }}
-                            >
-                              {budget.brand} ↗
-                            </a>
-                          ) : (
-                            "AutoZone / O'Reilly / Amazon"
-                          )}
+                  </thead>
+                  <tbody>
+                    {parts.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="text-muted text-sm">
+                          No specific replacement part was identified from your symptoms — see the step-by-step procedure below for part call-outs.
                         </td>
                       </tr>
-                    );
-                  })}
-                  <tr>
-                    <td>Dielectric Grease &amp; Shop Rags</td>
-                    <td>$5</td>
-                    <td>In Stock Locally</td>
-                  </tr>
-                  <tr>
-                    <td>Thread locker / Anti-seize lubricant</td>
-                    <td>$4</td>
-                    <td>In Stock Locally</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Detailed repair steps */}
-            <div data-testid="detailed-repair-steps" className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <p className="card-label" style={{ margin: 0 }}>Step-by-Step Procedure</p>
-                <span className="badge badge-free">RAG &amp; AI Verified</span>
+                    )}
+                    {parts.map((part, i) => {
+                      const prices = part.options.map((o) => o.estimated_price);
+                      const min = Math.min(...prices);
+                      const max = Math.max(...prices);
+                      const budget = part.options.find((o) => o.tier === 'Aftermarket / Budget') ?? part.options[0];
+                      return (
+                        <tr key={i}>
+                          <td>{part.part_name}</td>
+                          <td className="price-val-green">
+                            {min === max ? `$${min.toFixed(2)}` : `$${min.toFixed(2)} – $${max.toFixed(2)}`}
+                          </td>
+                          <td>
+                            {budget ? (
+                              <a
+                                href={budget.purchase_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: 'var(--accent-yellow)', textDecoration: 'none' }}
+                              >
+                                {budget.brand} ↗
+                              </a>
+                            ) : (
+                              "AutoZone / O'Reilly / Amazon"
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    <tr>
+                      <td>Dielectric Grease &amp; Shop Rags</td>
+                      <td>$5</td>
+                      <td>In Stock Locally</td>
+                    </tr>
+                    <tr>
+                      <td>Thread locker / Anti-seize lubricant</td>
+                      <td>$4</td>
+                      <td>In Stock Locally</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
-              {(() => {
-                const steps = repair.repair_steps.filter(
-                  (step) =>
-                    step !== "Disconnect negative battery terminal." &&
-                    step !== "Replace ignition coil."
-                );
-                const N = steps.length;
-                const p1 = Math.max(1, Math.floor(N / 4));
-                const p2 = Math.max(p1 + 1, Math.floor(N / 2));
-                const p3 = Math.max(p2 + 1, Math.floor((3 * N) / 4));
+              {/* Detailed repair steps */}
+              <div data-testid="detailed-repair-steps" className="card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                  <p className="card-label" style={{ margin: 0 }}>Step-by-Step Procedure</p>
+                  <span className="badge badge-free">RAG &amp; AI Verified</span>
+                </div>
 
-                // Determine which step (if any) gets each inline diagram.
-                let layoutStepIndex: number | null = null;
-                for (let i = p2; i < p3; i++) {
-                  if (TORQUE_REGEX.test(steps[i])) { layoutStepIndex = i; break; }
-                }
-                const layoutFallbackAtPhase3Top = layoutStepIndex === null && p3 > p2;
+                {(() => {
+                  const steps = repair.repair_steps.filter(
+                    (step) =>
+                      step !== "Disconnect negative battery terminal." &&
+                      step !== "Replace ignition coil."
+                  );
+                  const N = steps.length;
+                  const p1 = Math.max(1, Math.floor(N / 4));
+                  const p2 = Math.max(p1 + 1, Math.floor(N / 2));
+                  const p3 = Math.max(p2 + 1, Math.floor((3 * N) / 4));
 
-                let wiringStepIndex: number | null = null;
-                for (let i = 0; i < N; i++) {
-                  if (WIRING_REGEX.test(steps[i])) { wiringStepIndex = i; break; }
-                }
+                  // Determine which step (if any) gets each inline diagram.
+                  let layoutStepIndex: number | null = null;
+                  for (let i = p2; i < p3; i++) {
+                    if (TORQUE_REGEX.test(steps[i])) { layoutStepIndex = i; break; }
+                  }
+                  const layoutFallbackAtPhase3Top = layoutStepIndex === null && p3 > p2;
 
-                const getQualityCheck = (text: string) => {
-                  const lower = text.toLowerCase();
-                  if (lower.includes('battery') || lower.includes('disconnect') || lower.includes('terminal')) {
-                    return 'Verify the negative cable terminal is completely isolated and cannot touch any metal parts of the chassis.';
+                  let wiringStepIndex: number | null = null;
+                  for (let i = 0; i < N; i++) {
+                    if (WIRING_REGEX.test(steps[i])) { wiringStepIndex = i; break; }
                   }
-                  if (lower.includes('torque') || lower.includes('tighten') || lower.includes('ft-lbs')) {
-                    return 'Verify your torque wrench click. Stop immediately after the click to avoid over-tightening or stripping threads.';
-                  }
-                  if (lower.includes('socket') || lower.includes('bolt') || lower.includes('wrench')) {
-                    return 'Ensure the socket fits snug on the bolt head. Confirm it is not slipping before applying leverage.';
-                  }
-                  if (lower.includes('connector') || lower.includes('plug') || lower.includes('wire')) {
-                    return 'Check that the connector tab clicks audibly into place. Gently tug the plug to confirm it is locked.';
-                  }
-                  if (lower.includes('replace') || lower.includes('install') || lower.includes('new')) {
-                    return 'Clean any dirt or debris from the mounting surface before installing the new component.';
-                  }
-                  if (lower.includes('start') || lower.includes('test') || lower.includes('idle')) {
-                    return 'Verify there are no active fault codes or check engine warnings on your dashboard before starting.';
-                  }
-                  return 'Perform a quick visual inspection of the surrounding components to ensure no hoses or wires were pinched.';
-                };
 
-                const renderStep = (stepText: string, i: number) => {
-                  const isStepChecked = !!checkedSteps[i];
+                  const getQualityCheck = (text: string) => {
+                    const lower = text.toLowerCase();
+                    if (lower.includes('battery') || lower.includes('disconnect') || lower.includes('terminal')) {
+                      return 'Verify the negative cable terminal is completely isolated and cannot touch any metal parts of the chassis.';
+                    }
+                    if (lower.includes('torque') || lower.includes('tighten') || lower.includes('ft-lbs')) {
+                      return 'Verify your torque wrench click. Stop immediately after the click to avoid over-tightening or stripping threads.';
+                    }
+                    if (lower.includes('socket') || lower.includes('bolt') || lower.includes('wrench')) {
+                      return 'Ensure the socket fits snug on the bolt head. Confirm it is not slipping before applying leverage.';
+                    }
+                    if (lower.includes('connector') || lower.includes('plug') || lower.includes('wire')) {
+                      return 'Check that the connector tab clicks audibly into place. Gently tug the plug to confirm it is locked.';
+                    }
+                    if (lower.includes('replace') || lower.includes('install') || lower.includes('new')) {
+                      return 'Clean any dirt or debris from the mounting surface before installing the new component.';
+                    }
+                    if (lower.includes('start') || lower.includes('test') || lower.includes('idle')) {
+                      return 'Verify there are no active fault codes or check engine warnings on your dashboard before starting.';
+                    }
+                    return 'Perform a quick visual inspection of the surrounding components to ensure no hoses or wires were pinched.';
+                  };
+
+                  const renderStep = (stepText: string, i: number) => {
+                    const isStepChecked = !!checkedSteps[i];
+
+                    return (
+                      <li
+                        key={i}
+                        className="step-item"
+                        style={{
+                          alignItems: 'flex-start',
+                          opacity: 1,
+                          pointerEvents: 'auto',
+                          transition: 'opacity 0.25s ease',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          padding: '18px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
+                          <input
+                            type="checkbox"
+                            className="step-checkbox"
+                            checked={isStepChecked}
+                            onChange={() => toggleStep(i)}
+                          />
+                          <span className="step-num" style={{ background: isStepChecked ? '#22c55e' : 'var(--accent-orange)' }}>
+                            {isStepChecked ? '✓' : i + 1}
+                          </span>
+                          <span className={`step-text ${isStepChecked ? 'step-checked' : ''}`} style={{ fontWeight: 600 }}>
+                            {formatStepText(stepText)}
+                          </span>
+                        </div>
+
+                        {!isStepChecked && (
+                          <div style={{
+                            marginTop: '8px',
+                            padding: '10px 14px',
+                            background: 'rgba(59,130,246,0.08)',
+                            borderLeft: '4px solid #3b82f6',
+                            borderRadius: '0 8px 8px 0',
+                            fontSize: '0.85rem',
+                            color: 'var(--text-primary)',
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '8px'
+                          }}>
+                            <QualityCheckIcon size={16} style={{ flexShrink: 0, marginTop: 2, color: '#3b82f6' }} />
+                            <div><strong>Quality Checkpoint:</strong> {getQualityCheck(stepText)}</div>
+                          </div>
+                        )}
+
+                        {i === layoutStepIndex && <LayoutDiagram />}
+                        {i === wiringStepIndex && <WiringDiagram />}
+                      </li>
+                    );
+                  };
 
                   return (
-                    <li
-                      key={i}
-                      className="step-item"
-                      style={{
-                        alignItems: 'flex-start',
-                        opacity: 1,
-                        pointerEvents: 'auto',
-                        transition: 'opacity 0.25s ease',
-                        flexDirection: 'column',
-                        gap: '8px',
-                        padding: '18px'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
-                        <input
-                          type="checkbox"
-                          className="step-checkbox"
-                          checked={isStepChecked}
-                          onChange={() => toggleStep(i)}
-                        />
-                        <span className="step-num" style={{ background: isStepChecked ? '#22c55e' : 'var(--accent-orange)' }}>
-                          {isStepChecked ? '✓' : i + 1}
-                        </span>
-                        <span className={`step-text ${isStepChecked ? 'step-checked' : ''}`} style={{ fontWeight: 600 }}>
-                          {formatStepText(stepText)}
-                        </span>
+                    <>
+                      <div className="phase-section">
+                        <div className="phase-header"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><ShieldAlertIcon size={18} style={{ color: '#f87171' }} /><span>Phase 1: Safety &amp; Vehicle Preparation</span></span></div>
+                        <ol className="step-list">
+                          {steps.slice(0, p1).map((step, i) => renderStep(step, i))}
+                        </ol>
                       </div>
 
-                      {!isStepChecked && (
-                        <div style={{
-                          marginTop: '8px',
-                          padding: '10px 14px',
-                          background: 'rgba(59,130,246,0.08)',
-                          borderLeft: '4px solid #3b82f6',
-                          borderRadius: '0 8px 8px 0',
-                          fontSize: '0.85rem',
-                          color: 'var(--text-primary)',
-                          width: '100%',
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: '8px'
-                        }}>
-                          <QualityCheckIcon size={16} style={{ flexShrink: 0, marginTop: 2, color: '#3b82f6' }} />
-                          <div><strong>Quality Checkpoint:</strong> {getQualityCheck(stepText)}</div>
+                      {p2 > p1 && (
+                        <div className="phase-section">
+                          <div className="phase-header"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><DisassemblyIcon size={18} style={{ color: 'var(--accent-orange)' }} /><span>Phase 2: Disassembly &amp; Access</span></span></div>
+                          <ol className="step-list">
+                            {steps.slice(p1, p2).map((step, idx) => renderStep(step, idx + p1))}
+                          </ol>
                         </div>
                       )}
 
-                      {i === layoutStepIndex && <LayoutDiagram />}
-                      {i === wiringStepIndex && <WiringDiagram />}
-                    </li>
+                      {p3 > p2 && (
+                        <div className="phase-section">
+                          <div className="phase-header"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><CogIcon size={18} style={{ color: 'var(--accent-orange)' }} /><span>Phase 3: Component Replacement &amp; Torque</span></span></div>
+                          {layoutFallbackAtPhase3Top && <LayoutDiagram />}
+                          <ol className="step-list">
+                            {steps.slice(p2, p3).map((step, idx) => renderStep(step, idx + p2))}
+                          </ol>
+                        </div>
+                      )}
+
+                      {N > p3 && (
+                        <div className="phase-section">
+                          <div className="phase-header"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><CheckCircleIcon size={18} style={{ color: '#4ade80' }} /><span>Phase 4: Reassembly &amp; Torque Verification</span></span></div>
+                          <ol className="step-list">
+                            {steps.slice(p3).map((step, idx) => renderStep(step, idx + p3))}
+                          </ol>
+                        </div>
+                      )}
+
+                      <div ref={conclusionRef}>
+                        <ConclusionPhase symptoms={symptoms} />
+                      </div>
+                    </>
                   );
-                };
-
-                return (
-                  <>
-                    <div className="phase-section">
-                      <div className="phase-header"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><ShieldAlertIcon size={18} style={{ color: '#f87171' }} /><span>Phase 1: Safety &amp; Vehicle Preparation</span></span></div>
-                      <ol className="step-list">
-                        {steps.slice(0, p1).map((step, i) => renderStep(step, i))}
-                      </ol>
-                    </div>
-
-                    {p2 > p1 && (
-                      <div className="phase-section">
-                        <div className="phase-header"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><DisassemblyIcon size={18} style={{ color: 'var(--accent-orange)' }} /><span>Phase 2: Disassembly &amp; Access</span></span></div>
-                        <ol className="step-list">
-                          {steps.slice(p1, p2).map((step, idx) => renderStep(step, idx + p1))}
-                        </ol>
-                      </div>
-                    )}
-
-                    {p3 > p2 && (
-                      <div className="phase-section">
-                        <div className="phase-header"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><CogIcon size={18} style={{ color: 'var(--accent-orange)' }} /><span>Phase 3: Component Replacement &amp; Torque</span></span></div>
-                        {layoutFallbackAtPhase3Top && <LayoutDiagram />}
-                        <ol className="step-list">
-                          {steps.slice(p2, p3).map((step, idx) => renderStep(step, idx + p2))}
-                        </ol>
-                      </div>
-                    )}
-
-                    {N > p3 && (
-                      <div className="phase-section">
-                        <div className="phase-header"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><CheckCircleIcon size={18} style={{ color: '#4ade80' }} /><span>Phase 4: Reassembly &amp; Torque Verification</span></span></div>
-                        <ol className="step-list">
-                          {steps.slice(p3).map((step, idx) => renderStep(step, idx + p3))}
-                        </ol>
-                      </div>
-                    )}
-
-                    <div ref={conclusionRef}>
-                      <ConclusionPhase symptoms={symptoms} />
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-
-            {justSaved && (
-              <div className="card" style={{ border: '1px solid var(--accent-orange)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <CheckCircleIcon size={18} style={{ color: '#4ade80' }} />
-                  <span style={{ fontWeight: 700 }}>Saved to your garage.</span>
-                </div>
-                <a href="/garage" className="btn btn-secondary" style={{ width: 'auto', padding: '0 18px', marginTop: 10 }}>Go to My Garage →</a>
+                })()}
               </div>
-            )}
 
-            {showSavePrompt && !savePromptDismissed && !authUser && !justSaved && (
-              <SaveGuidePrompt vin={vin} vinData={vinData} symptoms={symptoms} citations={repair.citations} onDismiss={dismissSavePrompt} />
-            )}
-
-            {/* Clickable RAG citations */}
-            {repair.citations.length > 0 && (
-              <div className="card">
-                <p className="card-label">Sources &amp; OEM Service Citations (Official Portals)</p>
-                <div className="flex gap-2 flex-wrap">
-                  {repair.citations.map((cite, i) => {
-                    const getCitationLink = (c: string) => {
-                      const l = c.toLowerCase();
-                      if (l.includes('honda')) return 'https://techinfo.honda.com';
-                      if (l.includes('lexus') || l.includes('toyota')) return 'https://techinfo.toyota.com';
-                      return 'https://techinfo.toyota.com';
-                    };
-                    return (
-                      <a
-                        key={i}
-                        href={getCitationLink(cite)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        data-testid="rag-citation"
-                        className="citation-chip"
-                        style={{ textDecoration: 'none', color: 'var(--accent-yellow)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                      >
-                        <DocumentIcon size={15} /><span>{cite} ↗</span>
-                      </a>
-                    );
-                  })}
+              {justSaved && (
+                <div className="card" style={{ border: '1px solid var(--accent-orange)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <CheckCircleIcon size={18} style={{ color: '#4ade80' }} />
+                    <span style={{ fontWeight: 700 }}>Saved to your garage.</span>
+                  </div>
+                  <a href="/garage" className="btn btn-secondary" style={{ width: 'auto', padding: '0 18px', marginTop: 10 }}>Go to My Garage →</a>
                 </div>
-              </div>
-            )}
-          </>
+              )}
+
+              {showSavePrompt && !savePromptDismissed && !authUser && !justSaved && (
+                <SaveGuidePrompt vin={vin} vinData={vinData} symptoms={symptoms} citations={repair.citations} onDismiss={dismissSavePrompt} />
+              )}
+
+              {/* Clickable RAG citations */}
+              {repair.citations.length > 0 && (
+                <div className="card">
+                  <p className="card-label">Sources &amp; OEM Service Citations (Official Portals)</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {repair.citations.map((cite, i) => {
+                      const getCitationLink = (c: string) => {
+                        const l = c.toLowerCase();
+                        if (l.includes('honda')) return 'https://techinfo.honda.com';
+                        if (l.includes('lexus') || l.includes('toyota')) return 'https://techinfo.toyota.com';
+                        return 'https://techinfo.toyota.com';
+                      };
+                      return (
+                        <a
+                          key={i}
+                          href={getCitationLink(cite)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          data-testid="rag-citation"
+                          className="citation-chip"
+                          style={{ textDecoration: 'none', color: 'var(--accent-yellow)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        >
+                          <DocumentIcon size={15} /><span>{cite} ↗</span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )
         )}
 
         <button

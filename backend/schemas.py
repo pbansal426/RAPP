@@ -120,6 +120,8 @@ class RepairRequest(BaseModel):
 class RepairResponse(BaseModel):
     repair_steps: list[str]
     citations: list[str]
+    is_blocked_safety: bool = False
+    warning_message: str | None = None
 
 
 class RepairChatRequest(BaseModel):

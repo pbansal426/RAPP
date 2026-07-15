@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from backend.core.database import get_db
 from backend.core.models import DbChatUsage, DbGuideUnlock, DbUser
 from backend.core.security import decode_token
+from backend.routers.diagnose import check_high_risk
 from backend.routers.vin import decode_vin_internal
 from backend.schemas import (
     RepairChatRequest,
@@ -58,6 +59,53 @@ def _session_unlocks_vin(db: Session, session_id: str, vin: str) -> bool:
     return unlock is not None
 
 
+def check_text_high_risk(text: str) -> tuple[bool, str | None, str | None]:
+    """Scan arbitrary text (e.g. a retrieved TSB) for high-risk categories."""
+    t = text.lower()
+
+    # 1. SRS / Airbag
+    airbag_kws = ["airbag", "srs", "pretensioner", "clockspring", "side curtain"]
+    if any(kw in t for kw in airbag_kws):
+        return (
+            True,
+            "Airbag/SRS",
+            "DANGER: SRS / Airbag systems are explosive and safety-critical. Professional service is highly recommended.",
+        )
+
+    # 2. EV Battery / High-Voltage
+    ev_kws = [
+        "ev battery",
+        "hybrid battery",
+        "high voltage",
+        "hv battery",
+        "traction battery",
+        "lithium",
+    ]
+    if any(kw in t for kw in ev_kws):
+        return (
+            True,
+            "EV Battery",
+            "DANGER: High-voltage EV/hybrid battery systems carry lethal voltage. Professional service is highly recommended.",
+        )
+
+    # 3. Pressurized Fuel Line
+    fuel_kws = [
+        "fuel line",
+        "fuel rail",
+        "pressurized fuel",
+        "high pressure fuel",
+        "fuel leak",
+    ]
+    if any(kw in t for kw in fuel_kws):
+        return (
+            True,
+            "Fuel Line",
+            "DANGER: Pressurized fuel lines are highly flammable and run under extreme pressure. Professional service is highly recommended.",
+        )
+
+    return False, None, None
+
+
 @router.post("/api/repair", response_model=RepairResponse)
 async def repair(
     request: RepairRequest,
@@ -103,6 +151,34 @@ async def repair(
         else ([request.tools] if request.tools else [])
     )
 
+    # Stage 1.5 Safety Check: symptoms/OBD codes
+    is_high_risk, _high_risk_system, warning_msg = check_high_risk(
+        request.symptoms, obd_list
+    )
+
+    if not is_high_risk:
+        # Check retrieved TSBs for safety-critical text
+        user_query = f"{request.symptoms} " + " ".join(obd_list)
+        user_query = user_query.strip()
+        from backend.services.rag import retrieve
+
+        results = retrieve(query=user_query, vin_meta=vin_meta, k=5)
+        if results:
+            for doc in results:
+                has_risk, _sys_name, msg = check_text_high_risk(doc.get("text", ""))
+                if has_risk:
+                    is_high_risk = True
+                    warning_msg = msg
+                    break
+
+    if is_high_risk:
+        return RepairResponse(
+            repair_steps=[],
+            citations=[],
+            is_blocked_safety=True,
+            warning_message=warning_msg,
+        )
+
     repair_steps, citations = await generate_repair_procedure(
         vin_meta=vin_meta,
         symptoms=request.symptoms,
@@ -110,7 +186,12 @@ async def repair(
         user_tools=tools_list,
     )
 
-    return RepairResponse(repair_steps=repair_steps, citations=citations)
+    return RepairResponse(
+        repair_steps=repair_steps,
+        citations=citations,
+        is_blocked_safety=False,
+        warning_message=None,
+    )
 
 
 @router.post("/api/repair/chat", response_model=RepairChatResponse)

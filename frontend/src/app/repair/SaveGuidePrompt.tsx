@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { requestMagicLink } from '@/lib/auth';
 import { storePendingSave } from '@/lib/pendingSave';
 
+import type { VehicleInfo } from '@/lib/types';
+
 interface SaveGuidePromptProps {
   vin: string;
-  vinData: Record<string, unknown> | null;
+  vinData: VehicleInfo | null;
   symptoms: string;
   citations?: string[];
   onDismiss: () => void;

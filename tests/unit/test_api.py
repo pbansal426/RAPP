@@ -384,6 +384,43 @@ def test_repair_fallback(mock_retrieve, mock_get, client):
 
 @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
 @patch("backend.rag.retriever.retrieve")
+def test_repair_safety_blocked(mock_retrieve, mock_get, client):
+    # Setup mock VIN Decode
+    mock_decode_resp = MagicMock()
+    mock_decode_resp.status_code = 200
+    mock_decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
+    mock_get.return_value = mock_decode_resp
+
+    # Case 1: Symptom contains safety keyword
+    payload_symptom = {
+        "vin": "1HGBH41JXMN109186",
+        "symptoms": "Airbag SRS deploy indicator flashing",
+        "stripe_session_id": "cs_test_123"
+    }
+    response = client.post("/api/repair", json=payload_symptom)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_blocked_safety"] is True
+    assert data["repair_steps"] == []
+    assert "SRS / Airbag" in data["warning_message"]
+
+    # Case 2: Symptom is clean, but TSB text triggers safety
+    mock_retrieve.return_value = [{"text": "hybrid battery traction pack high voltage warning", "source": "manual.pdf"}]
+    payload_tsb = {
+        "vin": "1HGBH41JXMN109186",
+        "symptoms": "battery check engine light",
+        "stripe_session_id": "cs_test_123"
+    }
+    response = client.post("/api/repair", json=payload_tsb)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_blocked_safety"] is True
+    assert data["repair_steps"] == []
+    assert "High-voltage" in data["warning_message"]
+
+@patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+@patch("backend.rag.retriever.retrieve")
+
 def test_repair_gemini_structured_steps(mock_retrieve, mock_get, client, monkeypatch):
     # Grounded generation only runs when RAG actually returned OEM text --
     # a zero-hit query skips Gemini entirely (see test_repair_fallback).

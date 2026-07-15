@@ -8,7 +8,7 @@ import type { RepairChatRequest, RepairChatResponse, VehicleInfo } from '@/lib/t
 
 interface ChatPanelProps {
   vin: string;
-  vinData: Record<string, unknown> | null;
+  vinData: VehicleInfo | null;
   symptoms: string;
   repairSteps: string[];
 }
@@ -38,7 +38,7 @@ function incrementChatCount(vin: string): void {
   localStorage.setItem(chatCountKey(vin), String(getChatCount(vin) + 1));
 }
 
-function buildOpeningMessage(vinData: Record<string, unknown> | null, symptoms: string): string {
+function buildOpeningMessage(vinData: VehicleInfo | null, symptoms: string): string {
   const make = vinData ? String(vinData.make ?? '').trim() : '';
   const model = vinData ? String(vinData.model ?? '').trim() : '';
   const vehicle = [make, model].filter(Boolean).join(' ');
