@@ -1,5 +1,7 @@
 # ruff: noqa: B008 -- FastAPI's Depends(...) is meant to be called in
 # argument defaults; this isn't the mutable-default-argument bug B008 flags.
+import secrets
+import string
 import time
 import uuid
 
@@ -11,10 +13,12 @@ from sqlalchemy.orm import Session
 
 from backend.core.config import settings
 from backend.core.database import get_db
-from backend.core.models import DbUser, UsedVerifyToken
+from backend.core.models import DbGuideUnlock, DbUser, UsedVerifyToken
 from backend.core.security import create_access_token, create_verify_token, decode_token
 from backend.schemas import (
     AuthResponse,
+    RedeemReferralCreditRequest,
+    RedeemReferralCreditResponse,
     RequestLinkRequest,
     RequestLinkResponse,
     UpdateAccountRequest,
@@ -33,6 +37,27 @@ logger = structlog.get_logger()
 # the normalized email, value is the monotonic time of the last request.
 _REQUEST_LINK_COOLDOWN_SECONDS = 20.0
 _last_request_at: dict[str, float] = {}
+
+# Referral credits: each successful referred signup awards the referrer
+# and the new signup 1 credit apiece, redeemable 1:1 for a free
+# single-incident guide unlock via /api/auth/redeem-referral-credit.
+_REFERRAL_SIGNUP_BONUS_CREDITS = 1
+_REFERRAL_CODE_ALPHABET = string.ascii_uppercase + string.digits
+_REFERRAL_CODE_LENGTH = 8
+
+
+def _generate_referral_code(db: Session) -> str:
+    # Collision odds at this alphabet/length are astronomically low, but
+    # loop instead of trusting that -- referral_code has a unique
+    # constraint, so a collision would otherwise 500 the whole signup.
+    for _ in range(10):
+        code = "".join(
+            secrets.choice(_REFERRAL_CODE_ALPHABET)
+            for _ in range(_REFERRAL_CODE_LENGTH)
+        )
+        if not db.query(DbUser).filter(DbUser.referral_code == code).first():
+            return code
+    raise RuntimeError("Could not generate a unique referral code")
 
 
 def get_current_user(
@@ -73,6 +98,8 @@ def _to_user_response(user: DbUser) -> UserResponse:
         skill_level=user.skill_level or "Beginner",
         completed_jobs_count=user.completed_jobs_count or 0,
         skill_badges=user.skill_badges if user.skill_badges is not None else [],
+        referral_code=user.referral_code or "",
+        referral_credits=user.referral_credits or 0,
     )
 
 
@@ -100,12 +127,32 @@ async def request_link(
     # email creates the account, every later request just signs it in.
     user = db.query(DbUser).filter(DbUser.email == email).first()
     if not user:
+        referrer = None
+        referral_code = (request.referral_code or "").strip().upper() or None
+        if referral_code:
+            referrer = (
+                db.query(DbUser).filter(DbUser.referral_code == referral_code).first()
+            )
+            if not referrer:
+                # An invalid/typo'd code shouldn't block signup -- just
+                # don't attach a referral relationship or award credits.
+                referral_code = None
+
         user = DbUser(
             id=str(uuid.uuid4()),
             email=email,
             display_name=request.display_name.strip() if request.display_name else None,
+            referral_code=_generate_referral_code(db),
+            referred_by_code=referral_code,
+            # Welcome bonus for signing up via a valid referral link.
+            referral_credits=_REFERRAL_SIGNUP_BONUS_CREDITS if referrer else 0,
         )
         db.add(user)
+        if referrer:
+            referrer.referral_credits = (referrer.referral_credits or 0) + (
+                _REFERRAL_SIGNUP_BONUS_CREDITS
+            )
+            db.add(referrer)
         db.commit()
         db.refresh(user)
 
@@ -188,3 +235,44 @@ def update_me(
     db.commit()
     db.refresh(current_user)
     return _to_user_response(current_user)
+
+
+@router.post("/redeem-referral-credit", response_model=RedeemReferralCreditResponse)
+def redeem_referral_credit(
+    request: RedeemReferralCreditRequest,
+    current_user: DbUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RedeemReferralCreditResponse:
+    """Spends one referral credit to grant a free single-incident guide
+    unlock for `request.vin`, writing the same `DbGuideUnlock` row a real
+    checkout webhook would -- so `POST /api/repair` can't tell the
+    difference between a paid unlock and a credit-redeemed one."""
+    if (current_user.referral_credits or 0) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="No referral credits available.",
+        )
+
+    vin = request.vin.strip().upper()
+    if not vin:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A VIN is required.",
+        )
+
+    session_id = f"referral_{uuid.uuid4()}"
+    db.add(
+        DbGuideUnlock(
+            session_id=session_id,
+            vin=vin,
+            user_id=current_user.id,
+            price_type="referral_credit",
+        )
+    )
+    current_user.referral_credits = (current_user.referral_credits or 0) - 1
+    db.add(current_user)
+    db.commit()
+
+    return RedeemReferralCreditResponse(
+        session_id=session_id, remaining_credits=current_user.referral_credits
+    )
