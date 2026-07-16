@@ -1,5 +1,13 @@
 # RAPP Phase 2 — Implementation Plan & Gap Analysis
 
+> [!CAUTION]
+> ## ✅ PART 1 — COMPLETE (15/15). THIS DOCUMENT IS AN ARCHIVE.
+> Every code block in this plan is **done and shipped**. **Do not execute work out of this file** — read it only for historical context on already-completed features.
+>
+> **The active implementation plan is [`imp_part_2.md`](imp_part_2.md).** New work goes there.
+>
+> **Numbering in this (completed) file:** `"Stage X.Y"` (roadmap stages, e.g. *Stage 1.1*, *Stage 2.4*) and **single-number** `"Block 1"`–`"Block 8"` (execution task blocks) both refer to *this archive*. A **bare two-level number like `"1.1"` means Part 2** (`imp_part_2.md`), **not** this file. Full disambiguation table: `CLAUDE.md` → Step 1.
+
 **Reference Docs**: `docs/UPDATED_PRODUCT_NORTH_STAR.md` · `docs/ARCHITECTURE_BLUEPRINT.md` · `CLAUDE.md`
 **Last Updated**: 2026-07-15
 
