@@ -63,8 +63,16 @@ jobs:
       - name: Install Node deps
         run: npm ci
 
+      # tests/verify_tests.sh runs `npx playwright test` with no --project
+      # filter, so it exercises every project in playwright.config.ts
+      # (chromium, firefox, webkit, plus the Mobile Chrome/Safari device
+      # profiles, which reuse the chromium/webkit engines) -- installing
+      # only chromium here left every one of those runs failing on
+      # "Executable doesn't exist" for firefox/webkit regardless of app
+      # health, both in the healthy baseline run and all 4 fault-injection
+      # runs.
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Run E2E verification harness
         run: |
