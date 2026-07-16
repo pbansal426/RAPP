@@ -39,20 +39,26 @@ Both paths are fully specified below. Do §1 and §2 regardless, then jump to §
 
 ## 1. Prerequisites on the ingesting laptop
 
-1. **Clone the repo and check out this branch** (or `main`, once this branch is
-   merged):
+0. **GitHub auth (human step, do this first)** — the agent will need to `git
+   push` and open a PR at the end. Run `gh auth login` interactively once
+   (or confirm `gh auth status` already shows a logged-in account with repo
+   write access) before handing off to an AI agent — an agent cannot complete
+   an interactive OAuth/browser login itself.
+1. **Install `uv` and `git-lfs` if this is a fresh machine:**
    ```bash
-   git clone <repo-url> RAPP && cd RAPP
-   git checkout worktree-onsite-ingestion   # the branch carrying this runbook
-   ```
-2. **Git LFS** (needed for Path B; harmless to set up either way):
-   ```bash
+   brew install uv git-lfs    # or: curl -LsSf https://astral.sh/uv/install.sh | sh
    git lfs install
-   git lfs version   # should print a version, not an error
+   git lfs version            # should print a version, not an error
+   uv --version                # should print a version, not "command not found"
+   ```
+2. **Clone the repo:**
+   ```bash
+   git clone https://github.com/pbansal426/RAPP.git RAPP && cd RAPP
+   git checkout main   # this runbook is merged to main
    ```
 3. **Python env with the ETL dependency group:**
    ```bash
-   uv sync --all-groups      # or: uv sync --group etl
+   uv sync --group etl
    ```
    `uv.lock` is committed, so this reproduces the exact toolchain (chromadb,
    pdfplumber, etc.) used to build the existing store.
@@ -63,9 +69,20 @@ Both paths are fully specified below. Do §1 and §2 regardless, then jump to §
 5. **Internet access.** Two calls reach out: NHTSA's public API (no key needed)
    and, on the *first* embedding, a one-time ~80 MB download of ChromaDB's local
    `all-MiniLM-L6-v2` model. After that, embedding is fully offline/local.
+   Prefer a stable connection (ethernet or strong Wi-Fi) — this run makes
+   several thousand NHTSA requests over hours; a flaky connection means more
+   individual document failures (each is retried 3x automatically, but a
+   dead connection for a stretch will still show up as failures to review
+   afterward, not a hard stop).
 6. **No secrets required for ingestion.** `GEMINI_API_KEY` et al. are only for
    the *serving* app (diagnose/repair), not for building the KB. You can ingest
    with an empty `.env`.
+7. **Keep the laptop awake and powered.** This is a multi-hour unattended run
+   (§3.3 shows how to wrap it in `caffeinate` so normal display/idle sleep
+   won't pause it) — but macOS can still suspend background work if the lid
+   is closed on battery. Plug in and leave the lid open, or confirm your
+   power/sleep settings allow background network activity with the lid
+   closed before relying on that.
 
 ---
 
@@ -123,6 +140,29 @@ ls -l data/                 # confirm both resolve (not dangling)
 The SSD already carries the manifest from the first 7 vehicles, so those are
 auto-skipped — you'll only ingest the new 15.
 
+**Sanity-check you're actually pointed at the real, existing store** before
+touching anything — a wrong path/mount would silently start a brand-new empty
+store instead of extending the real one:
+
+```bash
+uv run python -c "
+import chromadb
+from chromadb.config import Settings
+c = chromadb.PersistentClient(path='data/chroma_db', settings=Settings(anonymized_telemetry=False))
+n = c.get_or_create_collection('repair_manuals').count()
+print(f'Existing chunk count: {n}')
+assert n > 8000, 'Expected the existing 7-vehicle baseline (~9,600 chunks) -- got far fewer. STOP: check the SSD mount/symlink before proceeding.'
+"
+```
+
+**Optional but recommended: snapshot the live store before a multi-hour
+unattended write.** Ingestion upserts by deterministic ID, so this is low-risk,
+but a cheap rollback point costs almost nothing given ~1.4 TB free on the SSD:
+
+```bash
+cp -R "$SSD/chroma_db" "$SSD/chroma_db.backup_pre_onsite_batch_$(date +%Y%m%d)"
+```
+
 ### 3.2 Smoke-test ONE vehicle first
 
 Never kick off a multi-hour batch without proving the pipeline runs on this
@@ -135,21 +175,53 @@ uv run --group etl python -m etl --year 2015 --make Ram --model 1500 --all --loa
 Expect a summary with non-zero "Records found" and "Chunks loaded". If it
 errors, stop and fix the environment — do not start the batch.
 
-### 3.3 Run the full batch
+### 3.3 Run the full batch — as a BACKGROUND process, not foreground
+
+> [!IMPORTANT]
+> This step runs for **hours**. If you (or an AI agent) run it as a normal
+> foreground command, a shell/SSH disconnect, a terminal tab closing, or an
+> agent harness's own tool-call timeout (many agent tools cap a single command
+> at ~10 minutes) will **kill the batch partway through**. Always background
+> it with `nohup` (survives the launching shell/session exiting) and
+> `caffeinate -i` (keeps the Mac from idle-sleeping while it runs), then poll
+> a log file instead of blocking on the process.
 
 ```bash
-uv run --group etl python scripts/ingest_seed_vehicles.py
+nohup caffeinate -i uv run --group etl python scripts/ingest_seed_vehicles.py \
+  > ingest_batch.log 2>&1 &
+echo $! > ingest_batch.pid
+echo "Started as PID $(cat ingest_batch.pid) -- logging to ingest_batch.log"
 ```
 
-This ingests all 15 vehicles from `scripts/seed_vehicles.json` in order,
-skipping anything already in the manifest, continuing past any single-vehicle
-failure, and auto-retrying NHTSA naming mismatches once. It's resumable — if the
-run is interrupted, just run it again.
-
-Watch progress live from another terminal:
+Confirm it actually started before walking away:
 ```bash
-watch -n 2 'cd /path/to/RAPP && uv run python -m etl.progress_view'
+sleep 10 && tail -20 ingest_batch.log
 ```
+You should see `Starting batch ingestion of 15 vehicles` and the first
+vehicle's "Processing ..." line. If instead the log is empty or shows a
+traceback, the process died immediately — check the error, fix it, and
+re-launch (safe to re-run; already-ingested PDFs are skipped via the manifest).
+
+**Check on it periodically** (every 15–30 minutes is plenty — it needs no
+interaction):
+```bash
+tail -30 ingest_batch.log                       # recent activity
+ps -p "$(cat ingest_batch.pid)" > /dev/null && echo "still running" || echo "FINISHED or died -- check the log"
+```
+
+Or watch the live per-vehicle progress snapshot from another terminal:
+```bash
+watch -n 5 'uv run python -m etl.progress_view'
+```
+
+**It's resumable.** If it dies (crash, disconnect, laptop actually slept
+despite `caffeinate`, power loss), just re-launch the same `nohup` command —
+the manifest skips everything already ingested, so you only lose the one
+in-flight vehicle's partial progress at worst.
+
+**When it's done**, `ps -p "$(cat ingest_batch.pid)"` will report no such
+process, and the tail of `ingest_batch.log` will show `Batch Ingestion
+Summary` followed by the paste-ready Markdown rows described below.
 
 ### 3.4 Record results and publish the docs update
 
@@ -290,26 +362,40 @@ self-contained and references only what's in the repo.
 
 ```
 You are running RAPP's knowledge-base ingestion on this laptop. The full,
-authoritative instructions are in docs/onsite_ingestion_runbook.md — read it
-first and follow it exactly. Do NOT improvise a different mechanism.
+authoritative instructions are in docs/onsite_ingestion_runbook.md (on the
+main branch) — read it first and follow it exactly. Do NOT improvise a
+different mechanism.
 
 Your job:
-1. Do the prerequisites (runbook §1): git checkout worktree-onsite-ingestion,
-   git lfs install, uv sync --all-groups. Confirm ~15 GB free disk.
+1. Confirm GitHub auth is already set up (`gh auth status`) -- if not, STOP
+   and ask the human to run `gh auth login` interactively; you cannot do
+   this yourself. Then do the rest of the prerequisites (runbook §1):
+   install uv/git-lfs if needed, `git clone` + `git checkout main`,
+   `uv sync --group etl`. Confirm ~15 GB free disk.
 2. Determine the SSD situation and pick Path A or Path B (runbook §0). If the
-   "Extreme SSD" is plugged into THIS laptop, use Path A. Otherwise Path B.
+   "Extreme SSD" is plugged into THIS laptop, use Path A (recommended).
+   Otherwise Path B.
 3. Obey every hard rule in runbook §2 — especially: NEVER set
    USE_GEMINI_EMBEDDINGS. Leave it unset. The store is 384-dim MiniLM.
-4. Smoke-test ONE vehicle before the batch (runbook §3.2). If it errors, stop
+4. Path A only: run the sanity-check command in runbook §3.1 BEFORE anything
+   else -- it must report a chunk count above 8000. If it doesn't, STOP; you
+   are not correctly pointed at the real SSD-hosted store. Also make the
+   optional backup copy described there.
+5. Smoke-test ONE vehicle before the batch (runbook §3.2). If it errors, stop
    and report — do not start the batch.
-5. Run scripts/ingest_seed_vehicles.py (runbook §3.3). It ingests the 15
-   vehicles in scripts/seed_vehicles.json, is resumable, and continues past
-   per-vehicle failures. This takes hours — that's expected.
-6. When done, paste the printed status rows into docs/ingestion_status.md,
-   commit ONLY the paths the runbook names (never `git add -A`), push to this
-   branch (or a new branch), and open a PR summarizing: vehicles done/skipped/
-   failed, total chunks loaded, and — for Path B — the kb_export/ size.
-7. If anything is ambiguous or a check fails in a way the runbook didn't
+6. Launch scripts/ingest_seed_vehicles.py as a BACKGROUND process exactly as
+   shown in runbook §3.3 (`nohup caffeinate -i uv run ... &`, log to a file,
+   save the PID) — NEVER run it as a blocking foreground command, it takes
+   hours and will get killed by a session timeout or disconnect otherwise.
+   Confirm it actually started (tail the log after ~10s), then check back
+   periodically (every 15-30 min) by tailing the log and checking the PID is
+   still alive. It's resumable if it dies -- just relaunch the same command.
+7. When the log shows "Batch Ingestion Summary", paste the printed
+   paste-ready status rows into docs/ingestion_status.md, commit ONLY the
+   paths the runbook names (never `git add -A`), push to a new branch, and
+   open a PR summarizing: vehicles done/skipped/failed, total chunks loaded,
+   and — for Path B — the kb_export/ size.
+8. If anything is ambiguous or a check fails in a way the runbook didn't
    anticipate, STOP and describe it in the PR rather than guessing.
 
 Hard stops: never touch data/rapp.db, data.bak_*, or the SSD's backups/;
