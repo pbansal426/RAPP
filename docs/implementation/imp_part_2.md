@@ -37,7 +37,7 @@ Do not commit if any of these fail. Fix forward; don't skip the check.
 
 | Block | Focus | Model | Thinking | Status |
 |---|---|---|---|---|
-| 1.1 | Fix stale/wrong price displays + `RAPP_GUIDE_FEE` calc bug + remove leaked jargon badge | Sonnet 5 | Medium | ⬜ Not started |
+| 1.1 | Fix stale/wrong price displays + `RAPP_GUIDE_FEE` calc bug + remove leaked jargon badge | Sonnet 5 | Medium | ✅ Done |
 | 1.2 | Resolve "100% Satisfaction Guarantee" vs. Terms-of-Service contradiction | Fable 5 | Low | ⬜ Not started |
 | 1.3 | De-overclaim "Verified"/"Genuine"/"Exact fit" language | Haiku 5 | Low | ⬜ Not started |
 | 1.4 | Harden production email deliverability (fail loud, not silent) | Sonnet 5 | Low | ⬜ Not started |
@@ -452,3 +452,11 @@ Add a `dry_run` mode before trusting this on a real batch: write a small one-off
 - **Deviation (blocklist tightened after dry-run — logged per §2 zero-silent-drift rule)**: the plan's blocklist included a bare `"gds2"` pattern. The mandatory dry-run (Silverado 1500, Equinox, Altima via live `list_communications`) showed `"gds2"` caught **genuine repair bulletins** — notably NHTSA 10190387 ("recover the TCM before declaring it a bad part and replacing") and 10138054 (SPS module-programming error). Every *truly* administrative record also matched `"session log"` or `"technical assistance case"`, so **`"gds2"` was removed**: zero loss of real admin coverage, both false positives eliminated. Final blocklist: `("session log", "cx connect", "technical assistance case", "how to email")`. Post-tightening dry-run: Silverado 13/1488, Equinox 26/1943, Altima 0/331 — all remaining skips manually confirmed purely administrative (GM TAC-contact / session-log-upload bulletins).
 - **Tests**: `ruff check etl/`, `black --check etl/`, `mypy etl/` all pass (17 files). Dry-run script was throwaway (deleted, not committed).
 - **Handoff**: filter applies to **future** `run_full_ingest` batches only; already-ingested chunks untouched. Merge this before launching any new/continued ingestion batch so the filter takes effect. No app/runtime surface changed (ETL-only).
+
+### 2026-07-16 — Claude (Sonnet 5) — Block 1.1 complete
+
+- **Block**: 1.1 — Fix stale/wrong price displays + `RAPP_GUIDE_FEE` calc bug + remove leaked jargon badge. Status → ✅ Done.
+- **Files changed**: `frontend/src/app/results/page.tsx` (5 edits: `'$39.00'`→`'—'` diy_total fallback, `'$4.00'`→`'—'` guide-fee fallback ×2, `Stage 2.3 &amp; 2.5 Verified`→`Personalized Guidance` badge text, added `guideFee={diagnosis?.cost_breakdown?.guide_fee}` prop to `<PartsPurchasePlan>`); `frontend/src/app/results/PartsPurchasePlan.tsx` (deleted hardcoded `const RAPP_GUIDE_FEE = 4.0`, added `guideFee?: number` prop with `= 4.99` default, switched both usages — the `diyTotal` calc and the budget-footer copy string — to the real prop value). `docs/implementation/imp_part_2.md` (this tracker + log).
+- **Followed `part_2_blocks/block_1_1.md` verbatim**, including its correction over the parent plan (the second `RAPP_GUIDE_FEE` usage at the budget-footer line that the parent plan's summary missed).
+- **Tests**: `cd frontend && ./node_modules/.bin/next build` — compiled successfully, zero TS/ESLint errors (two pre-existing unrelated `react-hooks/exhaustive-deps` warnings on `repair/page.tsx`/`results/page.tsx` line 197, untouched by this block). `grep -n "RAPP_GUIDE_FEE" PartsPurchasePlan.tsx` → empty (both usages removed). `grep -n "39.00\|\$4.00\|Stage 2\."page.tsx` → only pre-existing internal JSX *comments* referencing "Stage 2.1/2.2/2.3/2.5" remain (lines 310/675/704/778) — not user-visible text and out of this block's specced scope (only the rendered badge at line 692 was in scope); left untouched per "Do NOT touch" guidance to avoid drift beyond the specced edits.
+- **Handoff**: no backend change, no other block touched. Next block per tracker: 1.2 (Satisfaction Guarantee vs. ToS contradiction).
