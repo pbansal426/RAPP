@@ -500,6 +500,47 @@ def test_repair_gemini_failure_falls_back_to_template(
     data = response.json()
     assert "Disconnect negative battery terminal." in data["repair_steps"]
 
+
+@patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+@patch("backend.rag.retriever.retrieve")
+def test_repair_prefers_template_over_raw_rag_when_llm_off(
+    mock_retrieve, mock_get, client
+):
+    """With the LLM off (the default), a symptom that matches a curated
+    template must return that clean template -- not the raw retrieved OEM
+    snippets -- even when RAG returned hits. Guards the llm.py fallback that
+    keeps 'no API' mode serving readable hard-coded steps."""
+    mock_decode_resp = MagicMock()
+    mock_decode_resp.status_code = 200
+    mock_decode_resp.json.return_value = {"Results": [_extended_vin_payload()]}
+    mock_get.return_value = mock_decode_resp
+    # RAG returns a hit, but its text is NOT a usable step list.
+    mock_retrieve.return_value = [
+        {
+            "id": "doc_raw_1",
+            "text": "RAW_TSB_SNIPPET_MARKER unrelated bulletin prose",
+            "metadata": {"citation": "Some TSB"},
+            "distance": 0.1,
+        }
+    ]
+
+    payload = {
+        "vin": "1HGBH41JXMN109186",
+        "symptoms": "headlights not turning on",
+        "stripe_session_id": "cs_test_123",
+    }
+    response = client.post("/api/repair", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    # Clean curated bulb-replacement template, not the raw RAG snippet.
+    joined = " ".join(data["repair_steps"])
+    assert "RAW_TSB_SNIPPET_MARKER" not in joined
+    assert any("bulb-and-socket assembly counterclockwise" in s for s in data["repair_steps"])
+    assert len(data["citations"]) == 1
+    assert "no vehicle-specific" in data["citations"][0].lower()
+
+
 def test_create_checkout(client):
     payload = {
         "vin": "1HGBH41JXMN109186",

@@ -43,6 +43,16 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000"
     backend_url: str = "http://localhost:8000"
 
+    # Master on/off switch for ALL live Gemini/LLM calls (diagnosis summaries,
+    # repair-step generation, repair chat, VIN-photo OCR, checkpoint vision).
+    # OFF by default right now so the app never spends the owner's live
+    # GEMINI_API_KEY: every LLM path serves its deterministic curated fallback
+    # (template repair steps, static diagnosis summary, canned chat replies)
+    # instead. Flip on with LLM_ENABLED=true once on a paid Gemini tier and
+    # ready to pay per call. Enforced centrally in
+    # backend/services/gemini.py::get_genai_client (single chokepoint).
+    llm_enabled: bool = False
+
     # Keys / Secrets (Stubbed / optional)
     gemini_api_key: str | None = None
     # PostHog product analytics. Unset by default -- backend/services/analytics.py
