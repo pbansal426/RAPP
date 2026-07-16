@@ -39,7 +39,7 @@ Do not commit if any of these fail. Fix forward; don't skip the check.
 |---|---|---|---|---|
 | 1.1 | Fix stale/wrong price displays + `RAPP_GUIDE_FEE` calc bug + remove leaked jargon badge | Sonnet 5 | Medium | ✅ Done |
 | 1.2 | Resolve "100% Satisfaction Guarantee" vs. Terms-of-Service contradiction | Fable 5 | Low | ✅ Done |
-| 1.3 | De-overclaim "Verified"/"Genuine"/"Exact fit" language | Haiku 5 | Low | ⬜ Not started |
+| 1.3 | De-overclaim "Verified"/"Genuine"/"Exact fit" language | Haiku 5 | Low | ✅ Done |
 | 1.4 | Harden production email deliverability (fail loud, not silent) | Sonnet 5 | Low | ⬜ Not started |
 | 2.1 | Baseline funnel analytics (PostHog) | Sonnet 5 | Medium | ⬜ Not started |
 | 2.2 | Surface the referral program in the UI | Gemini Flash 3.5 | Medium | ⬜ Not started |
@@ -468,3 +468,11 @@ Add a `dry_run` mode before trusting this on a real batch: write a small one-off
 - **Followed `part_2_blocks/block_1_2.md` verbatim**, leaving `terms/page.tsx` and all `<p>` tags/styles untouched.
 - **Tests**: `next build` — compiled successfully with zero TS/ESLint errors. `grep -rn "Satisfaction Guarantee\|100% Satisfaction" frontend/src` → empty. `terms/page.tsx` diff check → `OK: terms untouched`.
 - **Handoff**: no backend change, no other block touched. Next block per tracker: 1.3 (De-overclaim "Verified"/"Genuine"/"Exact fit" language).
+
+### 2026-07-16 — Antigravity — Block 1.3 complete
+
+- **Block**: 1.3 — De-overclaim "Verified"/"Genuine"/"Exact fit" language. Status → ✅ Done.
+- **Files changed**: `backend/pricing.py` (Edits 1-3: de-overclaimed Aftermarket rationale, OEM brand `"OEM-Spec Part"`, OEM rationale `"Matches OEM spec — ..."`). `frontend/src/app/results/PartsPurchasePlan.tsx` (Edits 4-6: updated coupled oil/fluid/filter exact matchers to `'OEM-Spec Part'` and `'OEM spec'`, and de-overclaimed section header). `frontend/src/app/results/page.tsx` (Edit 7: changed badge to `AI-Generated, RAG-Grounded Analysis`). `docs/implementation/imp_part_2.md` (this tracker + log).
+- **Followed `part_2_blocks/block_1_3.md` verbatim**, preserving the em-dash `—` and keeping the coupled matchers exact so oil/fluid/filter relabeling stays functional.
+- **Tests**: `grep` check across `backend/pricing.py` and `frontend/src/app/results/` returned empty (`OK: no overclaiming strings found`). `uv run ruff check backend/`, `uv run black --check backend/`, `uv run mypy backend/` all passed. `uv run pytest tests/unit/ -v` passed (196 passed). `next build` compiled successfully with zero TS/ESLint errors.
+- **Handoff**: no other block touched. Next block per tracker: 1.4 (Harden production email deliverability).

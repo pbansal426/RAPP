@@ -30,12 +30,12 @@ function buildDisplayOptions(part: RecommendedPart): DisplayOption[] {
   const opt1 = oemOpt || part.options[0];
   const opt2 = aftermarketOpt || part.options[1] || part.options[0];
 
-  const opt1Brand = isOilFluidFilter && opt1?.brand === 'OEM / Genuine Dealer Part' ? 'Mobil 1 / Castrol' : (opt1?.brand || 'OEM Factory');
+  const opt1Brand = isOilFluidFilter && opt1?.brand === 'OEM-Spec Part' ? 'Mobil 1 / Castrol' : (opt1?.brand || 'OEM Factory');
   const opt2Brand = isOilFluidFilter && opt2?.brand === 'Duralast / equivalent aftermarket' ? 'Valvoline / Pennzoil' : (opt2?.brand || 'Premium Aftermarket');
 
-  const opt1Rationale = isOilFluidFilter && opt1?.rationale.includes('factory fit')
+  const opt1Rationale = isOilFluidFilter && opt1?.rationale.includes('OEM spec')
     ? 'Full synthetic formulation providing superior thermal stability, oxidation resistance, and extended engine protection.'
-    : (opt1?.rationale || 'Exact factory spec and fitment.');
+    : (opt1?.rationale || 'Matches OEM spec and fitment.');
   const opt2Rationale = isOilFluidFilter && opt2?.rationale.includes('daily-driver')
     ? 'Conventional mineral-based formulation meeting basic API specifications for standard drain intervals.'
     : (opt2?.rationale || 'High-quality aftermarket replacement.');
@@ -81,7 +81,7 @@ export default function PartsPurchasePlan({ parts, vehicleTitle, guideFee = 4.99
     <div className="parts-purchase-plan" style={{ marginTop: 28 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
-          <h2 className="section-title" style={{ margin: 0 }}>Verified Parts &amp; Tool Purchase Recommendations</h2>
+          <h2 className="section-title" style={{ margin: 0 }}>Recommended Parts &amp; Tool Purchase Options</h2>
           <p className="text-muted text-sm" style={{ marginTop: 4 }}>
             Curated engineering tiers specifically matched to your {vehicleTitle ?? 'vehicle'}. Tap a tier to build your parts budget.
           </p>
