@@ -430,7 +430,7 @@ export default function ResultsPage() {
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <p className="card-label" style={{ margin: 0 }}>Free Diagnosis & Mod Overview</p>
-          <span className="badge badge-free">Verified AI Analysis</span>
+          <span className="badge badge-free">AI-Generated, RAG-Grounded Analysis</span>
         </div>
 
         <div data-testid="free-diagnosis-summary">
