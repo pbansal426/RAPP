@@ -50,3 +50,17 @@ crashes/stalls.
 | 4 | 2017 Honda CR-V | 281 | 281 | — | ~06:33 | ~06:46 | ~13 | ~22 | (approximate — bundled window) |
 
 <!-- From here on, the watchdog appends rows automatically on each vehicle-boundary transition, with precise (not approximate) start/end times. -->
+| 5 | 2016 Nissan Rogue | 322 | 306 | 2482 | 2026-07-16T06:50:24Z | 2026-07-16T06:54:24Z | 4.0 | 76 | live-tracked |
+| 6 | 2015 Ford Escape | 128 | 98 | 443 | 2026-07-16T06:54:24Z | 2026-07-16T06:58:24Z | 4.0 | 24 | live-tracked |
+| 7 | 2016 Mazda CX-5 | 704 | 607 | 3995 | 2026-07-16T06:58:24Z | 2026-07-16T07:20:24Z | 22.0 | 28 | live-tracked |
+| 8 | 2013 Chevrolet Equinox | 1943 | 1920 | 6913 | 2026-07-16T07:20:24Z | 2026-07-16T08:22:26Z | 62.0 | 31 | live-tracked |
+| 9 | 2016 Ford Explorer | 197 | 150 | 811 | 2026-07-16T08:22:26Z | 2026-07-16T08:28:26Z | 6.0 | 25 | live-tracked |
+| 10 | 2015 Jeep Grand Cherokee | 511 | 474 | 1208 | 2026-07-16T08:28:26Z | 2026-07-16T08:42:26Z | 14.0 | 34 | live-tracked |
+| 11 | 2015 Jeep Wrangler | 225 | 199 | 409 | 2026-07-16T08:42:26Z | 2026-07-16T08:48:27Z | 6.0 | 33 | live-tracked |
+| 12 | 2015 Nissan Altima | 331 | 278 | 3404 | 2026-07-16T08:48:27Z | 2026-07-16T09:00:27Z | 12.0 | 23 | live-tracked |
+| 13 | 2015 Hyundai Sonata | 250 | 198 | 2291 | 2026-07-16T09:00:27Z | 2026-07-16T09:10:27Z | 10.0 | 20 | live-tracked |
+| 14 | 2017 Subaru Outback | 384 | 339 | 2894 | 2026-07-16T09:10:27Z | 2026-07-16T09:24:28Z | 14.0 | 24 | live-tracked |
+| ? | 2015 Ram 1500 | 591 | 493 | 0 | 2026-07-16T10:10:14Z | 2026-07-16T12:06:20Z | 116.1 | 4 | live-tracked |
+| ? | 2015 Chevrolet Silverado 1500 | 1488 | 1353 | 0 | 2026-07-16T12:06:20Z | 2026-07-16T14:14:08Z | 127.8 | 11 | live-tracked |
+| ? | 2016 Toyota RAV4 | 257 | 147 | 0 | 2026-07-16T14:14:08Z | 2026-07-16T14:18:08Z | 4.0 | 37 | live-tracked |
+| ? | 2017 Honda CR-V | 281 | 201 | 0 | 2026-07-16T14:18:08Z | 2026-07-16T14:22:08Z | 4.0 | 50 | live-tracked |
