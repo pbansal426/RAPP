@@ -41,7 +41,7 @@ Do not commit if any of these fail. Fix forward; don't skip the check.
 | 2.3 | Wire `/hub` and `/check-ai` into real navigation | Gemini Flash 3.5 | Low | ⬜ Not started |
 | 2.4 | Operationalize the recall-watch cron for real | Haiku 5 | Medium | ⬜ Not started |
 | 3.1 | Doc consistency pass (name/tagline + imp.md self-contradiction) | Haiku 5 | Low | ⬜ Not started |
-| 3.2 | NHTSA ingestion noise filter (future batches only) | Sonnet 5 | Medium | ⬜ Not started |
+| 3.2 | NHTSA ingestion noise filter (future batches only) | Sonnet 5 | Medium | ✅ Done |
 
 Update the Status column to `✅ Done` as each block completes, and log the session in Section 5.
 
@@ -438,3 +438,12 @@ Add a `dry_run` mode before trusting this on a real batch: write a small one-off
 ## 5. Active Execution Log & AI Session Audit Trail
 
 <!-- Append one entry per session here: date, agent/model used, blocks completed, files changed, tests run, handoff notes for the next session. -->
+
+### 2026-07-16 — Claude (Opus 4.8) — Block 3.2 complete
+
+- **Block**: 3.2 — NHTSA ingestion noise filter (future batches only). Status → ✅ Done.
+- **Files changed**: `etl/pipeline.py` (added `_ADMINISTRATIVE_SUMMARY_PATTERNS` + `_is_administrative_record` helper at module level with the `(record.summary or "")` None-guard; inserted the skip check at the top of `run_full_ingest`'s `for record in records:` loop). `docs/implementation/imp_part_2.md` (this tracker + log).
+- **Bug fix vs. parent plan**: used the `part_2_blocks/block_3_2.md` None-guard (`TsbRecord.summary` is `str | None`) — the parent plan's bare `record.summary.lower()` would `AttributeError` on any null-summary record.
+- **Deviation (blocklist tightened after dry-run — logged per §2 zero-silent-drift rule)**: the plan's blocklist included a bare `"gds2"` pattern. The mandatory dry-run (Silverado 1500, Equinox, Altima via live `list_communications`) showed `"gds2"` caught **genuine repair bulletins** — notably NHTSA 10190387 ("recover the TCM before declaring it a bad part and replacing") and 10138054 (SPS module-programming error). Every *truly* administrative record also matched `"session log"` or `"technical assistance case"`, so **`"gds2"` was removed**: zero loss of real admin coverage, both false positives eliminated. Final blocklist: `("session log", "cx connect", "technical assistance case", "how to email")`. Post-tightening dry-run: Silverado 13/1488, Equinox 26/1943, Altima 0/331 — all remaining skips manually confirmed purely administrative (GM TAC-contact / session-log-upload bulletins).
+- **Tests**: `ruff check etl/`, `black --check etl/`, `mypy etl/` all pass (17 files). Dry-run script was throwaway (deleted, not committed).
+- **Handoff**: filter applies to **future** `run_full_ingest` batches only; already-ingested chunks untouched. Merge this before launching any new/continued ingestion batch so the filter takes effect. No app/runtime surface changed (ETL-only).
