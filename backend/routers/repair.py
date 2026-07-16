@@ -290,6 +290,13 @@ _CHECKPOINT_ALLOWED_CONTENT_TYPES = {
 }
 _CHECKPOINT_ALLOWED_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif")
 _CHECKPOINT_MAX_BYTES = 20 * 1024 * 1024  # 20 MB
+# Some phone browsers/upload libraries send a generic or missing content-type
+# for legitimate image uploads (HEIC in particular) -- the filename extension
+# is the fallback signal for those. But that fallback must not rescue a file
+# whose content-type is a concrete, different type (e.g. "application/pdf"
+# with a spoofed/renamed ".jpg" filename) -- only a genuinely uninformative
+# content-type should defer to the extension.
+_GENERIC_CONTENT_TYPES = {"", "application/octet-stream", "binary/octet-stream"}
 
 
 @router.post("/api/repair/checkpoint/verify", response_model=CheckpointVerifyResponse)
@@ -309,8 +316,13 @@ async def checkpoint_verify(
     content_type = (file.content_type or "").lower()
     filename = (file.filename or "").lower()
     ext_ok = filename.endswith(_CHECKPOINT_ALLOWED_EXTENSIONS)
+    content_type_ok = content_type in _CHECKPOINT_ALLOWED_CONTENT_TYPES
+    # Only defer to the extension when the content-type itself is
+    # uninformative -- a concrete mismatched type (e.g. application/pdf)
+    # must be rejected even if the filename claims to be a .jpg.
+    extension_fallback_ok = content_type in _GENERIC_CONTENT_TYPES and ext_ok
 
-    if content_type not in _CHECKPOINT_ALLOWED_CONTENT_TYPES and not ext_ok:
+    if not content_type_ok and not extension_fallback_ok:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unsupported image type. Use JPEG, PNG, WEBP, or HEIC.",
