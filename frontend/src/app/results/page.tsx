@@ -515,6 +515,7 @@ export default function ResultsPage() {
       <PartsPurchasePlan
         parts={diagnosis?.recommended_parts ?? []}
         vehicleTitle={`${vinData?.year ?? ''} ${vinData?.make ?? ''} ${vinData?.model ?? ''}`.trim() || 'your vehicle'}
+        guideFee={diagnosis?.cost_breakdown?.guide_fee}
       />
 
       {/* ── Price & Value Comparison Table ── */}
@@ -580,7 +581,7 @@ export default function ResultsPage() {
               <td className="price-val-green" style={{ padding: '14px 16px', color: '#4ade80', fontWeight: 800 }}>
                 {diagnosis?.cost_breakdown
                   ? `$${diagnosis.cost_breakdown.diy_total.toFixed(2)}`
-                  : '$39.00'}
+                  : '—'}
               </td>
               <td style={{ padding: '14px 16px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -590,7 +591,7 @@ export default function ResultsPage() {
                       : '2 – 3 Hours completion'}
                   </span>
                   <span className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: '0.8rem' }}>
-                    Save up to 85% today with exact step-by-step guidance & verified parts (includes {diagnosis?.cost_breakdown ? `$${diagnosis.cost_breakdown.guide_fee.toFixed(2)}` : '$4.00'} guide fee)
+                    Save up to 85% today with exact step-by-step guidance & verified parts (includes {diagnosis?.cost_breakdown ? `$${diagnosis.cost_breakdown.guide_fee.toFixed(2)}` : '—'} guide fee)
                   </span>
                 </div>
               </td>
@@ -689,7 +690,7 @@ export default function ResultsPage() {
             <p className="card-label" style={{ margin: 0, color: 'var(--accent-orange)' }}>Pre-Job Readiness &amp; Competence Quiz</p>
           </div>
           <span className="badge" style={{ background: 'rgba(249, 115, 22, 0.15)', color: 'var(--accent-yellow)', fontSize: '0.75rem', fontWeight: 700 }}>
-            Stage 2.3 &amp; 2.5 Verified
+            Personalized Guidance
           </span>
         </div>
 
@@ -970,7 +971,7 @@ export default function ResultsPage() {
                 Lifetime access to the repair guide for this specific vehicle and symptom.
               </p>
               <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#fff', marginBottom: 20 }}>
-                {diagnosis?.cost_breakdown ? `$${diagnosis.cost_breakdown.guide_fee.toFixed(2)}` : '$4.00'}
+                {diagnosis?.cost_breakdown ? `$${diagnosis.cost_breakdown.guide_fee.toFixed(2)}` : '—'}
               </div>
             </div>
             <button
