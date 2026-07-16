@@ -41,7 +41,7 @@ Do not commit if any of these fail. Fix forward; don't skip the check.
 | 1.2 | Resolve "100% Satisfaction Guarantee" vs. Terms-of-Service contradiction | Fable 5 | Low | ✅ Done |
 | 1.3 | De-overclaim "Verified"/"Genuine"/"Exact fit" language | Haiku 5 | Low | ✅ Done |
 | 1.4 | Harden production email deliverability (fail loud, not silent) | Sonnet 5 | Low | ✅ Done |
-| 2.1 | Baseline funnel analytics (PostHog) | Sonnet 5 | Medium | ⬜ Not started |
+| 2.1 | Baseline funnel analytics (PostHog) | Sonnet 5 | Medium | ✅ Done |
 | 2.2 | Surface the referral program in the UI | Gemini Flash 3.5 | Medium | ⬜ Not started |
 | 2.3 | Wire `/hub` and `/check-ai` into real navigation | Gemini Flash 3.5 | Low | ⬜ Not started |
 | 2.4 | Operationalize the recall-watch cron for real | Haiku 5 | Medium | ⬜ Not started |
@@ -443,6 +443,15 @@ Add a `dry_run` mode before trusting this on a real batch: write a small one-off
 ## 5. Active Execution Log & AI Session Audit Trail
 
 <!-- Append one entry per session here: date, agent/model used, blocks completed, files changed, tests run, handoff notes for the next session. -->
+
+### 2026-07-16 — Claude (Opus 4.8) — Block 2.1 complete
+
+- **Block**: 2.1 — Baseline funnel analytics (PostHog). Status → ✅ Done.
+- **Followed `part_2_blocks/block_2_1.md` verbatim**, including its 3 corrections vs. this parent plan: `diagnose_completed` fired in `results/page.tsx` (not `diagnose/page.tsx`); `checkout_completed` fired in the Polar webhook (not a Stripe handler); PostHog init done via a client component since `layout.tsx` is a server component.
+- **Files changed**: NEW `frontend/src/lib/analytics.ts` (single wrapper, no-op when `NEXT_PUBLIC_POSTHOG_KEY` unset), NEW `frontend/src/app/PostHogInit.tsx` (client init component), NEW `backend/services/analytics.py` (server wrapper, no-op when `POSTHOG_API_KEY` unset). Edited `frontend/package.json` (+`posthog-js`), `pyproject.toml` (+`posthog`), `backend/core/config.py` (`posthog_api_key`/`posthog_host` settings), `frontend/src/app/layout.tsx` (render `<PostHogInit/>`), `frontend/src/app/page.tsx` (`vin_submitted` at all 4 VIN paths via a `method` param on `decodeAndGo` + explicit calls for ymm/photo/scan), `frontend/src/app/results/page.tsx` (`diagnose_completed`, `results_viewed` effect, `checkout_started`), `backend/routers/payments.py` (`checkout_completed` after `_record_guide_unlock`, vin+price_type only, no PII). Exactly the 5 specced events — no others.
+- **Tests**: `cd frontend && ./node_modules/.bin/next build` → 24/24 pages, zero TS/ESLint errors. `uv run pytest tests/unit/` → 199 passed. `uv run ruff check backend/`, `uv run black --check backend/`, `uv run mypy backend/` all pass. App is no-op-safe with no key set (default) — verification ran entirely on build/lint/type/unit paths, **no live Gemini or PostHog network calls**.
+- **⚠️ OUTSTANDING HUMAN-ONLY TASK (handoff, not a blocker)**: create a free-tier PostHog account + project and set `NEXT_PUBLIC_POSTHOG_KEY` / `POSTHOG_API_KEY` (+ optional `*_HOST`) in the deployed env before events flow. Logged in the new repo-level checklist `docs/DEFERRED_HUMAN_TASKS.md` (item 2).
+- **Handoff**: next block per tracker: 2.2 (surface referral program in UI).
 
 ### 2026-07-16 — Claude (Opus 4.8) — Block 1.4 complete
 

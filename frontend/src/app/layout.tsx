@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import HeaderAuthLink from './HeaderAuthLink';
+import PostHogInit from './PostHogInit';
 import { THEME_INIT_SCRIPT } from '@/lib/theme';
 
 export const metadata: Metadata = {
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           CSS custom properties above/in globals.css, not by this class
           name; it's a vestigial test hook now, not the real theme switch. */}
       <body className="dark bg-slate-900">
+        <PostHogInit />
         <HeaderAuthLink />
         {children}
       </body>

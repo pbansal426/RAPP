@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
+import { track } from '@/lib/analytics';
 import { fetchAllMakes, fetchModels, POWERTRAINS, type MakeGroups } from '@/lib/nhtsa';
 import { getTrimsForModel, lookupVehicleSpecs } from '@/lib/vehicleSpecs';
 import { isValidVinCheckDigit } from '@/lib/vinCheckDigit';
@@ -135,7 +136,10 @@ export default function HomePage() {
     setYmmError(null);
   };
 
-  const decodeAndGo = async (vinCandidate: string) => {
+  const decodeAndGo = async (
+    vinCandidate: string,
+    method: 'manual' | 'scan' = 'manual',
+  ) => {
     const trimmed = vinCandidate.trim().toUpperCase();
     if (trimmed.length !== 17) {
       setError('VIN must be exactly 17 characters.');
@@ -147,6 +151,7 @@ export default function HomePage() {
       const data = await api.get<VinData>(`/api/vin/${trimmed}`);
       localStorage.setItem('rapp_vin', trimmed);
       localStorage.setItem('rapp_vin_data', JSON.stringify(data));
+      track('vin_submitted', { method });
       router.push('/diagnose');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not decode VIN. Please try again.');
@@ -179,6 +184,7 @@ export default function HomePage() {
       engine,
       powertrain: selectedPowertrain,
     }));
+    track('vin_submitted', { method: 'ymm' });
     router.push('/diagnose');
   };
 
@@ -207,6 +213,7 @@ export default function HomePage() {
           if (data.decoded_vehicle && data.decoded_vehicle.make) {
             localStorage.setItem('rapp_vin', data.vin);
             localStorage.setItem('rapp_vin_data', JSON.stringify(data.decoded_vehicle));
+            track('vin_submitted', { method: 'photo' });
             router.push('/diagnose');
             return;
           }
@@ -246,13 +253,14 @@ export default function HomePage() {
     setVin(detectedVin);
     localStorage.setItem('rapp_vin', detectedVin);
     localStorage.setItem('rapp_vin_data', JSON.stringify(decodedVehicle));
+    track('vin_submitted', { method: 'scan' });
     router.push('/diagnose');
   };
 
   const handleDoorJambDecoded = async (candidateVin: string) => {
     setScanMode(null);
     setVin(candidateVin);
-    await decodeAndGo(candidateVin);
+    await decodeAndGo(candidateVin, 'scan');
   };
 
   const handleCropCancel = () => {

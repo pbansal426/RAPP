@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
+import { track } from '@/lib/analytics';
 import PartsPurchasePlan from './PartsPurchasePlan';
 import { requestMagicLink, useAuthUser, updateAccount } from '@/lib/auth';
 import { completePendingSave, storePendingSave } from '@/lib/pendingSave';
@@ -188,6 +189,10 @@ export default function ResultsPage() {
     })
       .then((res) => {
         setDiagnosis(res);
+        track('diagnose_completed', {
+          is_high_risk: res.is_high_risk,
+          has_recommended_parts: (res.recommended_parts?.length ?? 0) > 0,
+        });
         // Persisted so /repair can render real parts data instead of
         // placeholder text -- see rapp_parts_{vin} in repair/page.tsx.
         localStorage.setItem(`rapp_parts_${storedVin}`, JSON.stringify(res.recommended_parts ?? []));
@@ -195,6 +200,15 @@ export default function ResultsPage() {
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Diagnosis failed.'))
       .finally(() => setLoading(false));
   }, [router]);
+
+  // Fire once the free diagnosis has loaded (and recalls, if they resolve).
+  useEffect(() => {
+    if (!diagnosis) return;
+    track('results_viewed', {
+      guide_fee: diagnosis.cost_breakdown?.guide_fee ?? 0,
+      has_recalls: (recalls?.count ?? 0) > 0,
+    });
+  }, [diagnosis, recalls]);
 
   // Best-effort background warm-up: fired the moment the user shows purchase
   // intent (clicking Unlock), not on every free diagnosis, so it doesn't
@@ -222,6 +236,7 @@ export default function ResultsPage() {
     setPayLoading(true);
     pregenerateRepairGuide();
     try {
+      track('checkout_started', { price_type: priceType });
       const { checkout_url } = await api.post<CheckoutResponse>('/api/payments/create-checkout', {
         vin,
         price_type: priceType,
