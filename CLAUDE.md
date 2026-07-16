@@ -13,6 +13,7 @@ Every AI agent (Claude Code, Antigravity, Jules, or general Gemini instances) wo
 1. **Step 1: Session Initialization (Read-First & Workspace Check)**
    - Run `git status` to verify you are starting with a clean working tree. If there are uncommitted discrepancies from a prior agent, resolve or stash them before beginning your block.
    - Before writing or modifying any code, read [`docs/implementation/imp.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/imp.md) to identify the active implementation block and priority items.
+   - **⭐ If you are told to execute a "Part 2" block (any block numbered 1.1–1.4, 2.1–2.4, or 3.1–3.2 from `docs/implementation/imp_part_2.md`), you MUST FIRST open its dedicated, code-verified execution spec at [`docs/implementation/part_2_blocks/block_<N>_<M>.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/part_2_blocks/) (e.g. block 1.1 → `part_2_blocks/block_1_1.md`).** That file contains the exact edits, current-code snippets, gotchas, and corrections for the block, and **overrides `imp_part_2.md` on any conflict** (it fixes stale line numbers/strings the parent plan missed). Start with `part_2_blocks/README.md` if you're unsure which file maps to your block. Do not begin editing from `imp_part_2.md` alone.
    - You MUST work **strictly within the active phase/block**. Do not jump to Stage 2 or Stage 3 tasks if Stage 1 items are pending or unverified.
    - Check existing architectural boundaries in `CLAUDE.md`.
 
