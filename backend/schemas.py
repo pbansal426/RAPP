@@ -173,6 +173,10 @@ class RequestLinkRequest(BaseModel):
     # Only used the first time this email signs in (creates the account);
     # ignored on subsequent requests for an existing account.
     display_name: str | None = None
+    # Referral program: another user's `referral_code`. Only applied on
+    # first-time account creation (ignored on subsequent sign-ins for an
+    # existing account, same as display_name above).
+    referral_code: str | None = None
 
 
 class RequestLinkResponse(BaseModel):
@@ -196,6 +200,17 @@ class UserResponse(BaseModel):
     skill_level: str = "Beginner"
     completed_jobs_count: int = 0
     skill_badges: list[str] = []
+    referral_code: str = ""
+    referral_credits: int = 0
+
+
+class RedeemReferralCreditRequest(BaseModel):
+    vin: str
+
+
+class RedeemReferralCreditResponse(BaseModel):
+    session_id: str
+    remaining_credits: int
 
 
 class AuthResponse(BaseModel):

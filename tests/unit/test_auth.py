@@ -183,3 +183,88 @@ def test_update_display_name(client):
     )
     assert response.status_code == 200
     assert response.json()["display_name"] == "Updated Name"
+
+
+def _login(client, email: str) -> str:
+    token = _request_and_extract_token(client, email)
+    return client.post("/api/auth/verify-link", json={"token": token}).json()["token"]
+
+
+def test_signup_generates_a_unique_referral_code(client):
+    token = _request_and_extract_token(client, "referral-owner@example.com")
+    user = client.post("/api/auth/verify-link", json={"token": token}).json()["user"]
+    assert user["referral_code"]
+    assert len(user["referral_code"]) == 8
+    assert user["referral_credits"] == 0
+
+
+def test_signup_with_valid_referral_code_awards_both_parties(client):
+    referrer_access = _login(client, "referrer@example.com")
+    referrer = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {referrer_access}"}
+    ).json()
+    code = referrer["referral_code"]
+
+    response = client.post(
+        "/api/auth/request-link",
+        json={"email": "referred2@example.com", "referral_code": code},
+    )
+    assert response.status_code == 200
+    referred_token = response.json()["magic_link"].split("token=")[1]
+    referred_user = client.post(
+        "/api/auth/verify-link", json={"token": referred_token}
+    ).json()["user"]
+    assert referred_user["referral_credits"] == 1
+
+    referrer_after = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {referrer_access}"}
+    ).json()
+    assert referrer_after["referral_credits"] == 1
+
+
+def test_signup_with_invalid_referral_code_does_not_award_credits(client):
+    response = client.post(
+        "/api/auth/request-link",
+        json={"email": "no-referrer@example.com", "referral_code": "BOGUSCOD"},
+    )
+    assert response.status_code == 200
+    token = response.json()["magic_link"].split("token=")[1]
+    user = client.post("/api/auth/verify-link", json={"token": token}).json()["user"]
+    assert user["referral_credits"] == 0
+
+
+def test_redeem_referral_credit_creates_guide_unlock(client):
+    referrer_access = _login(client, "credit-referrer@example.com")
+    code = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {referrer_access}"}
+    ).json()["referral_code"]
+
+    client.post(
+        "/api/auth/request-link",
+        json={"email": "credit-referred@example.com", "referral_code": code},
+    )
+
+    response = client.post(
+        "/api/auth/redeem-referral-credit",
+        json={"vin": "1hgcm82633a123456"},
+        headers={"Authorization": f"Bearer {referrer_access}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["session_id"]
+    assert data["remaining_credits"] == 0
+
+    # A second redemption with no credits left must be rejected.
+    second = client.post(
+        "/api/auth/redeem-referral-credit",
+        json={"vin": "1hgcm82633a123456"},
+        headers={"Authorization": f"Bearer {referrer_access}"},
+    )
+    assert second.status_code == 402
+
+
+def test_redeem_referral_credit_requires_auth(client):
+    response = client.post(
+        "/api/auth/redeem-referral-credit", json={"vin": "1hgcm82633a123456"}
+    )
+    assert response.status_code == 403
