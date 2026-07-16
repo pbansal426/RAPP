@@ -34,6 +34,32 @@ from etl.transform.pdf_layout import LayoutAwarePdfParser
 log = logging.getLogger(__name__)
 
 
+# Conservative blocklist: these phrase patterns only ever appear on pure
+# dealer-process/tooling bulletins (verified against real NHTSA samples
+# during the 2026-07-16 on-site batch), never on genuine repair/failure
+# TSBs. Deliberately narrow -- a false-positive skip here silently loses
+# real repair content, which is worse than a little ingestion noise.
+#
+# NOTE: a bare "gds2" pattern was in the original plan but REMOVED after the
+# dry-run review -- it caught genuine repair bulletins that merely reference
+# the GDS2 diagnostic tool (e.g. NHTSA 10190387, "recover the TCM before
+# declaring it a bad part and replacing"). Every truly-administrative record
+# also contains "session log" or "technical assistance case", so dropping
+# "gds2" loses no real admin coverage while eliminating those false positives.
+_ADMINISTRATIVE_SUMMARY_PATTERNS = (
+    "session log",
+    "cx connect",
+    "technical assistance case",
+    "how to email",
+)
+
+
+def _is_administrative_record(record: TsbRecord) -> bool:
+    # record.summary is Optional[str]; guard against None or it AttributeErrors.
+    summary_lower = (record.summary or "").lower()
+    return any(pattern in summary_lower for pattern in _ADMINISTRATIVE_SUMMARY_PATTERNS)
+
+
 class PipelineError(RuntimeError):
     """A stage failed in a way the pipeline cannot recover from."""
 
@@ -198,6 +224,12 @@ def run_full_ingest(
             progress(None)
 
             for record in records:
+                if _is_administrative_record(record):
+                    log.info(
+                        f"Skipping administrative bulletin (NHTSA ID {record.nhtsa_id}): "
+                        f"{(record.summary or '')[:80]}"
+                    )
+                    continue
                 try:
                     documents = client.resolve_documents(record)
                     time.sleep(0.5)  # Polite pacing for NHTSA API
