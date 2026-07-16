@@ -57,3 +57,7 @@ frontend/build/
 playwright-report/
 test-results/
 mock_app.log
+
+# On-site ingestion runtime artifacts (machine-specific, never committed --
+# ingest_batch.log is already covered by the *.log rule above)
+ingest_batch.pid
