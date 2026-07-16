@@ -406,7 +406,38 @@ the backend lint/type/test gate first).
 
 ---
 
-## 8. Scaling note (unchanged from the Jules era)
+## 8. Git hygiene: don't leave loose ends
+
+Multi-hour unattended sessions are exactly the scenario where work quietly
+piles up uncommitted on a laptop and then goes nowhere — especially relevant
+here since the machine running ingestion may need to be handed back
+mid-session (see `scripts/pause_ingestion_and_eject.sh`) or swapped for a
+different laptop entirely. A future agent resuming elsewhere needs
+everything already merged, not stranded on a local branch only you can see.
+
+**Protocol, followed at the start and end of every ingestion session (and
+any time you're about to hand off a machine)**:
+
+1. `git status` — anything meaningful (docs, scripts, `scripts/seed_vehicles.json`
+   changes) that isn't yet committed gets committed now, not left dangling.
+   Stage specific paths only, per the hard rule in §2 — never `git add -A`.
+2. `git push` the branch. Don't rely on the working tree alone as the only
+   copy of the work — a laptop that gets physically handed back is a laptop
+   you may not have access to again.
+3. If a PR is open for this work, check whether it's mergeable
+   (`gh pr checks`, `gh pr view --json mergeable`) and merge it once CI is
+   green, rather than leaving it open indefinitely. An open-but-abandoned PR
+   is exactly the kind of loose end this section exists to prevent.
+4. Exception: the final ingestion-results PR (§3.4) intentionally waits
+   until the *whole* batch is done before being opened — that's a scoping
+   decision (one clean PR per completed batch), not an excuse to leave
+   *other* unrelated work (docs, scripts, config) sitting uncommitted in the
+   meantime. Those can and should go out via their own small PR as soon as
+   they're ready, independent of whether ingestion itself has finished.
+
+---
+
+## 9. Scaling note (unchanged from the Jules era)
 
 This runbook is scoped to **curated batches of a few dozen vehicles**, which fit
 comfortably on the SSD and (for Path B) well within Git LFS's free tier. True
