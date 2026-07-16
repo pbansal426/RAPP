@@ -10,6 +10,7 @@ from backend.core.database import get_db
 from backend.core.models import DbGuideUnlock, DbUser
 from backend.core.security import decode_token
 from backend.schemas import CheckoutRequest, CheckoutResponse
+from backend.services import analytics
 from backend.services.payments_mor import (
     build_mock_checkout_url,
     build_success_redirect_url,
@@ -237,6 +238,12 @@ async def polar_webhook(
                 vin=vin,
                 user_id=user_id or (user.id if user else None),
                 price_type=metadata.get("price_type"),
+            )
+            # Only vin + price_type -- no symptoms, no email, no PII.
+            analytics.track(
+                "checkout_completed",
+                properties={"price_type": metadata.get("price_type"), "vin": vin},
+                distinct_id=user_id or (user.id if user else "anonymous"),
             )
         logger.info(
             "polar_checkout_completed",

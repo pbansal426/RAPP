@@ -45,6 +45,11 @@ class Settings(BaseSettings):
 
     # Keys / Secrets (Stubbed / optional)
     gemini_api_key: str | None = None
+    # PostHog product analytics. Unset by default -- backend/services/analytics.py
+    # and the frontend wrapper both no-op entirely when the key is absent, so
+    # events only flow once a human adds the keys in a deployed environment.
+    posthog_api_key: str | None = None
+    posthog_host: str = "https://us.i.posthog.com"
     # Magic-link auth email delivery (Resend). Unset by default -- see
     # backend/services/email.py: request_link() falls back to returning the
     # link directly in the API response (dev-mode), so auth works with zero

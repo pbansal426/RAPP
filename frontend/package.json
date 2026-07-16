@@ -13,6 +13,7 @@
     "@zxing/library": "^0.23.0",
     "heic2any": "^0.0.4",
     "next": "14.2.35",
+    "posthog-js": "^1.160.0",
     "react": "^18",
     "react-dom": "^18",
     "tesseract.js": "^5.1.0"
