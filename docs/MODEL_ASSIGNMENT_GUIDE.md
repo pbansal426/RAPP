@@ -11,7 +11,7 @@ Why Blocks? Whenever multiple tasks touch the exact same core files (`models.py`
 - 🔴 **Heavyweight Geniuses (`Claude Opus 5`, `Gemini 3.1 Pro`)**: Spend premium tokens here **only** where errors could cost real money or break core data (`Block 1 Payment Overhaul`, `Block 6 Check AI Vector Search`).
 - 🟡 **All-Round Workhorses (`Claude Sonnet 5`)**: Your daily driver. Fast, surgical, type-safe, and avoids over-engineering (`Block 2 Safety & Legal`, `Block 3 Outcome Moat`, `Block 5 Photo OCR`).
 - 🟢 **Speed & Savings Champions (`Gemini 3.5 Flash`, `Claude Haiku`, `Fable / GPT OSS`)**: Cost fractions of a cent and run instantly. Assigned to static text, legal checklists, and volume dictionary/markdown generation (`Block 7 Content Hub`).
-- 🟣 **Background Specialist (`Jules - Google Async Agent`)**: Meant for long-running batch ingestion tasks (`Block 9 Vector Database Scale`) so your interactive terminal sessions never lock up or time out.
+- 🟣 **On-Site Batch Runner (a more capable laptop + local AI agent)**: Long-running batch ingestion (`Block 9 Vector Database Scale`) now runs on a second laptop you control — plug the SSD in and ingest straight into the live store. Replaces the earlier Google Jules plan, which proved unreliable. See `docs/onsite_ingestion_runbook.md`.
 
 ---
 
@@ -27,7 +27,7 @@ Why Blocks? Whenever multiple tasks touch the exact same core files (`models.py`
 | **Block 6** ✅ **COMPLETED** | **"Check My ChatGPT Answer" Viral RAG Funnel**<br>• `2.6 External AI Verification Landing Page (/check-ai)` | **Gemini 3.1 Pro** | Claude Opus 5 | 🔴 Spend Premium<br>*(Vector RAG Engine)* |
 | **Block 7** ✅ **COMPLETED** | **High-Velocity Content & SEO Hub**<br>• `3.1 Routine Maintenance Templates (Wipers/Oil)`<br>• `3.2 Knowledge Hub Articles & Guide Library (/hub)` | **Gemini 3.5 Flash** | Claude Haiku / Fable | 🟢 Maximum Savings<br>*(Dict & Markdown Speed)* |
 | **Block 8** ✅ **COMPLETED** | **Growth & Proactive Retention Automation**<br>• `3.3 Referral Program Tracking (`referral_code`)`<br>• `3.4 Recall & TSB Watch Automated Email Crons` | **Claude Sonnet 5** | Gemini 3.1 Pro | 🟡 Smart Balance<br>*(Async Python Scripts)* |
-| **Block 9** | **Vector Database Scale-Up (GTM Gate)**<br>• `4.1 20-Vehicle Batch Ingestion Pilot (Chroma DB)` | **Jules (Async Agent)** | Gemini 3.1 Pro via CLI | 🟣 Background Task<br>*(Unattended Batch)* |
+| **Block 9** | **Vector Database Scale-Up (GTM Gate)**<br>• `4.1 15-Generation On-Site Batch Ingestion (Chroma DB)` | **On-site laptop + local AI agent** | Gemini 3.1 Pro via CLI | 🟣 Background Task<br>*(Unattended Batch)* |
 
 ---
 
@@ -84,6 +84,6 @@ Why Blocks? Whenever multiple tasks touch the exact same core files (`models.py`
 - 💡 **Rationale**: Sonnet writes rock-solid, crash-proof standalone Python scripts (`httpx` + `structlog`) that run unattended in background crons with automatic retries (`tenacity`).
 
 #### Block 9: Vector Database Scale-Up — GTM Gate (`Stage 4.1`)
-- 🛠️ **What we are building**: Our gating item before any go-to-market push: batch chunking, embedding, and storing technical manual data across 20 vehicle makes/models into `chroma_db`.
-- 🏆 **Top Pick: `Jules` (Google Async Agent)** (Backup: `Gemini 3.1 Pro via CLI script`)
-- 💡 **Rationale**: Jules is specifically engineered for long-running, hands-off batch repository tasks. It runs unattended in the background for 20+ minutes ingesting thousands of records without timing out your interactive terminal window.
+- 🛠️ **What we are building**: Our gating item before any go-to-market push: batch chunking, embedding, and storing NHTSA-TSB technical data for a curated **15 vehicle generations** into `chroma_db` on the external SSD. Everything is prepped (`scripts/seed_vehicles.json`, `scripts/ingest_seed_vehicles.py`, `docs/onsite_ingestion_runbook.md`).
+- 🏆 **Top Pick: a more capable laptop you control, driven by a local AI agent** (Backup: `Gemini 3.1 Pro via CLI script`). **Not Google Jules** — it proved unreliable, and a local laptop can plug the SSD in and write straight into the live store with no Git-LFS round-trip.
+- 💡 **Rationale**: The ingestion workload is CPU/RAM-heavy (PDF parsing + local MiniLM embedding). Offloading it to a more capable machine keeps the primary 8GB Mac free, and running it locally (vs a cloud VM) means direct SSD access and full reproducibility with zero API keys. Follow `docs/onsite_ingestion_runbook.md` exactly; hand its §7 task block to the on-site agent.

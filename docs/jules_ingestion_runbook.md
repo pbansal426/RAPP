@@ -1,4 +1,18 @@
-# Google Jules Ingestion Runbook
+# Google Jules Ingestion Runbook  ⚠️ DEPRECATED
+
+> [!WARNING]
+> **This Jules cloud workflow is deprecated and no longer the plan of record.**
+> Ingestion now runs **on a local laptop** — see
+> [`docs/onsite_ingestion_runbook.md`](./onsite_ingestion_runbook.md), which is
+> the authoritative runbook. Jules proved unreliable in practice, and a laptop
+> you control can plug the SSD in and write straight into the live store,
+> avoiding the Git-LFS round-trip Jules was forced into (it could never touch
+> the SSD directly). The `etl/` pipeline, ChromaDB store, and export/import
+> mechanics described below are all still accurate and reused verbatim by the
+> on-site runbook — only the *machine* running them changed. This file is kept
+> for historical context and for the LFS export/import details, which remain
+> correct for the on-site "Path B" flow. See the decision-log entry in
+> `docs/UPDATED_PRODUCT_NORTH_STAR.md` §12.
 
 This is the precise, self-contained task specification for handing NHTSA TSB
 ingestion off to Google Jules. Everything it references already exists and

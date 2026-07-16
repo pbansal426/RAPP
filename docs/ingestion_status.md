@@ -1,11 +1,12 @@
 # NHTSA TSB Ingestion Status
 
-Tracks progress of `python -m etl --all --load` runs into the local ChromaDB
+Tracks progress of `python -m etl --all --load` runs into the ChromaDB
 store (`data/chroma_db`, gitignored — this file is the durable record of
-what's been ingested). Vehicle list is the 8 make/model combos the app
-actually supports today (`tests/mock_app.py`'s YMM cascade / synthetic-VIN
-map); Corolla and the 2014–16 Highlander XLE are the two the E2E suite
-exercises directly (see CLAUDE.md), so those are top priority.
+what's been ingested). The **baseline** table below is the 7 vehicles
+ingested locally on 2026-07-05; the **next-phase** table is the curated
+15-generation scale-up batch (`scripts/seed_vehicles.json`), run on-site per
+`docs/onsite_ingestion_runbook.md`. Corolla and the 2014–16 Highlander XLE are
+the two the E2E suite exercises directly (see CLAUDE.md).
 
 | Year | Make | Model | Status | Records Found | PDFs Ingested | PDFs Skipped (no text) | PDFs Failed | Chunks Loaded | Last Updated |
 |------|------|-------|--------|---------------:|---------------:|------------------------:|------------:|---------------:|--------------|
@@ -17,16 +18,42 @@ exercises directly (see CLAUDE.md), so those are top priority.
 | 2018 | Ford | F-150 | ✅ Done | 389 | 389 | 0 | 0 | 1702 | 2026-07-05 |
 | 2025 | Lexus | ES (300h) | ✅ Done — NHTSA models this as just "ES", "300h" is a trim not a model name | 32 | 32 | 0 | 0 | 216 | 2026-07-05 |
 
-**Queue complete.** All planned vehicles for this manual/local phase are done: Corolla, Highlander, Civic, Accord, Camry, F-150, ES. Next phase is Google Jules (see docs/jules_ingestion_runbook.md once written).
+**Baseline complete (7 vehicles above).** These were ingested locally on the
+primary Mac on 2026-07-05: Corolla, Highlander, Civic, Accord, Camry, F-150, ES.
 
-Queue ends here per user request 2026-07-05 — RX350, Silverado, RAV4, CR-V, and Explorer have been dropped, not deferred. Only F-150 and ES300h remain after Camry finishes.
+## Next phase — on-site batch of 15 generations (planned)
+
+The scale-up phase runs **on a more capable laptop**, not Google Jules (which
+was found unreliable — see `docs/onsite_ingestion_runbook.md`, the authoritative
+runbook, and the decision log in `docs/UPDATED_PRODUCT_NORTH_STAR.md` §12). The
+queue lives in `scripts/seed_vehicles.json` and is driven by
+`scripts/ingest_seed_vehicles.py`. Fill in the rows below as the batch completes
+(the driver prints paste-ready rows):
+
+| Year | Make | Model | Status | Records Found | PDFs Ingested | PDFs Skipped (no text) | PDFs Failed | Chunks Loaded | Last Updated |
+|------|------|-------|--------|---------------:|---------------:|------------------------:|------------:|---------------:|--------------|
+| 2015 | Ram | 1500 | ⬜ Queued | | | | | | |
+| 2015 | Chevrolet | Silverado 1500 | ⬜ Queued | | | | | | |
+| 2016 | Toyota | RAV4 | ⬜ Queued | | | | | | |
+| 2017 | Honda | CR-V | ⬜ Queued | | | | | | |
+| 2016 | Nissan | Rogue | ⬜ Queued | | | | | | |
+| 2015 | Ford | Escape | ⬜ Queued | | | | | | |
+| 2016 | Mazda | CX-5 | ⬜ Queued | | | | | | |
+| 2013 | Chevrolet | Equinox | ⬜ Queued | | | | | | |
+| 2016 | Ford | Explorer | ⬜ Queued | | | | | | |
+| 2015 | Jeep | Grand Cherokee | ⬜ Queued | | | | | | |
+| 2015 | Jeep | Wrangler | ⬜ Queued | | | | | | |
+| 2015 | Nissan | Altima | ⬜ Queued | | | | | | |
+| 2015 | Hyundai | Sonata | ⬜ Queued | | | | | | |
+| 2017 | Subaru | Outback | ⬜ Queued | | | | | | |
+| 2016 | Kia | Sorento | ⬜ Queued | | | | | | |
 
 ## Live progress
 
-Watch the current ingestion run update live, from your own terminal, no need to check in with Claude:
+Watch the current ingestion run update live, from your own terminal, no need to check in with Claude (run from the repo root on the ingesting machine):
 
 ```bash
-watch -n 2 'cd /Users/prathambansal/Dev/RAPP/.claude/worktrees/generic-dancing-blum && uv run python -m etl.progress_view'
+watch -n 2 'uv run python -m etl.progress_view'
 ```
 
 ## Notes

@@ -1,10 +1,17 @@
 [
-  {"year": 2010, "make": "Toyota", "model": "Corolla"},
-  {"year": 2015, "make": "Toyota", "model": "Highlander"},
-  {"year": 2012, "make": "Honda", "model": "Civic"},
-  {"year": 2014, "make": "Honda", "model": "Accord"},
-  {"year": 2013, "make": "Ford", "model": "F-150"},
-  {"year": 2015, "make": "Ford", "model": "Escape"},
-  {"year": 2014, "make": "Chevrolet", "model": "Silverado"},
-  {"year": 2013, "make": "Toyota", "model": "Camry"}
+  {"year": 2015, "make": "Ram", "model": "1500", "generation": "4th gen DS (2011-2018)", "segment": "Full-size truck", "rationale": "Top-3 US seller every year; high-dollar repairs where the dealer-vs-DIY gap is largest."},
+  {"year": 2015, "make": "Chevrolet", "model": "Silverado 1500", "generation": "K2XX (2014-2018)", "segment": "Full-size truck", "rationale": "#2 best-selling vehicle in America; enormous parc, high repair spend."},
+  {"year": 2016, "make": "Toyota", "model": "RAV4", "generation": "XA40 (2013-2018)", "segment": "Compact SUV", "rationale": "Best-selling non-truck in the US; the highest-parc SUV segment overall."},
+  {"year": 2017, "make": "Honda", "model": "CR-V", "generation": "5th gen (2017-2022)", "segment": "Compact SUV", "rationale": "Perennial top compact SUV; 1.5T oil-dilution TSB history makes the verified-fitment reveal strong."},
+  {"year": 2016, "make": "Nissan", "model": "Rogue", "generation": "T32 (2014-2020)", "segment": "Compact SUV", "rationale": "Top-5 seller; the Jatco CVT complaint pattern is a textbook 'is this quote fair' fraud-shield moment."},
+  {"year": 2015, "make": "Ford", "model": "Escape", "generation": "3rd gen (2013-2019)", "segment": "Compact SUV", "rationale": "High-volume compact SUV; EcoBoost coolant-intrusion TSBs are a high-value, high-anxiety search."},
+  {"year": 2016, "make": "Mazda", "model": "CX-5", "generation": "KE (2013-2016)", "segment": "Compact SUV", "rationale": "Adds Mazda coverage; loyal, research-heavy owner base that shops repair prices."},
+  {"year": 2013, "make": "Chevrolet", "model": "Equinox", "generation": "2nd gen (2010-2017)", "segment": "Compact SUV", "rationale": "Very high on-road population; 2.4L timing-chain/oil-consumption issues are prime fraud-shield territory."},
+  {"year": 2016, "make": "Ford", "model": "Explorer", "generation": "U502 (2011-2019)", "segment": "Midsize SUV", "rationale": "Top midsize/3-row SUV; high repair spend and a large, price-sensitive family-owner base."},
+  {"year": 2015, "make": "Jeep", "model": "Grand Cherokee", "generation": "WK2 (2011-2021)", "segment": "Midsize SUV", "rationale": "Complex, high-dollar repairs (air suspension, electronics) where dealer quotes are steepest."},
+  {"year": 2015, "make": "Jeep", "model": "Wrangler", "generation": "JK (2007-2018)", "segment": "Off-road SUV", "rationale": "Massive, engaged owner base and heavy TSB volume; strong DIY-and-mods crossover."},
+  {"year": 2015, "make": "Nissan", "model": "Altima", "generation": "L33 (2013-2018)", "segment": "Midsize sedan", "rationale": "Top-selling midsize sedan; CVT failure pattern is one of the most-searched 'am I being ripped off' repairs."},
+  {"year": 2015, "make": "Hyundai", "model": "Sonata", "generation": "LF (2015-2019)", "segment": "Midsize sedan", "rationale": "Theta II 2.4L engine recall/knock-sensor saga: high volume, safety-flagged, and a powerful verified-vs-dealer story."},
+  {"year": 2017, "make": "Subaru", "model": "Outback", "generation": "BS (2015-2019)", "segment": "Wagon/SUV", "rationale": "Fiercely loyal owner base; documented oil-consumption/head-gasket issues that owners actively research."},
+  {"year": 2016, "make": "Kia", "model": "Sorento", "generation": "UM (2016-2020)", "segment": "Midsize SUV", "rationale": "Adds Kia coverage; shares the Theta II engine-recall angle with a family-hauler, budget-conscious ICP."}
 ]
