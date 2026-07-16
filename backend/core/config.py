@@ -90,12 +90,21 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _require_resend_key_outside_dev(self) -> "Settings":
-        if self.environment in EMAIL_REQUIRED_ENVIRONMENTS and not self.resend_api_key:
-            raise ValueError(
-                f"RESEND_API_KEY must be set when ENVIRONMENT={self.environment!r} -- "
-                "magic-link auth is not allowed to fall back to leaking the sign-in "
-                "link in the API response outside development/test."
-            )
+        if self.environment in EMAIL_REQUIRED_ENVIRONMENTS:
+            if not self.resend_api_key:
+                raise ValueError(
+                    f"RESEND_API_KEY must be set when ENVIRONMENT={self.environment!r} -- "
+                    "magic-link auth is not allowed to fall back to leaking the sign-in "
+                    "link in the API response outside development/test."
+                )
+            if "resend.dev" in self.email_from:
+                raise ValueError(
+                    f"email_from is still Resend's sandbox address ({self.email_from!r}) "
+                    f"in ENVIRONMENT={self.environment!r} -- Resend's sandbox sender only "
+                    "delivers to the account owner's own inbox, so every real user's "
+                    "magic-link email would silently fail. Verify a custom domain with "
+                    "Resend and set EMAIL_FROM to an address on that domain before deploying."
+                )
         return self
 
     @property

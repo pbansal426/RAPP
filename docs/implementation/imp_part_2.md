@@ -40,7 +40,7 @@ Do not commit if any of these fail. Fix forward; don't skip the check.
 | 1.1 | Fix stale/wrong price displays + `RAPP_GUIDE_FEE` calc bug + remove leaked jargon badge | Sonnet 5 | Medium | ✅ Done |
 | 1.2 | Resolve "100% Satisfaction Guarantee" vs. Terms-of-Service contradiction | Fable 5 | Low | ✅ Done |
 | 1.3 | De-overclaim "Verified"/"Genuine"/"Exact fit" language | Haiku 5 | Low | ✅ Done |
-| 1.4 | Harden production email deliverability (fail loud, not silent) | Sonnet 5 | Low | ⬜ Not started |
+| 1.4 | Harden production email deliverability (fail loud, not silent) | Sonnet 5 | Low | ✅ Done |
 | 2.1 | Baseline funnel analytics (PostHog) | Sonnet 5 | Medium | ⬜ Not started |
 | 2.2 | Surface the referral program in the UI | Gemini Flash 3.5 | Medium | ⬜ Not started |
 | 2.3 | Wire `/hub` and `/check-ai` into real navigation | Gemini Flash 3.5 | Low | ⬜ Not started |
@@ -443,6 +443,15 @@ Add a `dry_run` mode before trusting this on a real batch: write a small one-off
 ## 5. Active Execution Log & AI Session Audit Trail
 
 <!-- Append one entry per session here: date, agent/model used, blocks completed, files changed, tests run, handoff notes for the next session. -->
+
+### 2026-07-16 — Claude (Opus 4.8) — Block 1.4 complete
+
+- **Block**: 1.4 — Harden production email deliverability (fail loud, not silent). Status → ✅ Done.
+- **Files changed**: `backend/core/config.py` (extended the existing `_require_resend_key_outside_dev` `model_validator` — kept it a single validator, added a sandbox-sender check that raises `ValueError` when `email_from` still contains `resend.dev` in `staging`/`production`). `tests/unit/test_config.py` (updated `test_settings_allows_configured_resend_key_outside_dev` to pass a real `email_from`; added `test_settings_rejects_sandbox_sender_outside_dev` and `test_settings_allows_sandbox_sender_in_development`). `docs/implementation/imp_part_2.md` (this tracker + log).
+- **Followed `part_2_blocks/block_1_4.md` verbatim** (no corrections vs. parent plan; validator was at 91-99 and `email_from` at 56 as documented). The sandbox default on line 56 was left unchanged — it's correct for local dev; the validator only rejects it in staging/production.
+- **Tests**: `uv run pytest tests/unit/` → 196 passed (2 pre-existing config tests updated to supply a real sender since the new guard correctly rejects the sandbox default). `uv run ruff check backend/`, `uv run black --check backend/`, `uv run mypy backend/` all pass. Guard verified via one-liners: `ENVIRONMENT=production RESEND_API_KEY=test-key` raises `ValueError` mentioning the sandbox address; adding `EMAIL_FROM="RAPP <hello@example.com>"` prints `OK`.
+- **⚠️ OUTSTANDING HUMAN-ONLY OPS TASK (handoff, not a blocker)**: a human must verify a real owned domain with Resend (DNS TXT/CNAME records in Resend's dashboard) and set `EMAIL_FROM` to an address on that verified domain in each deployed (staging/production) environment's actual env vars. **No AI agent can complete this** — it requires DNS control over a real domain. Until it's done, a staging/production deploy will now **refuse to boot** (by design) rather than silently ship broken magic-link auth. The code fix is the deliverable and is complete; this note is the remaining human action.
+- **Handoff**: backend-only change; no frontend/runtime API surface touched. Next block per tracker: 2.1.
 
 ### 2026-07-16 — Claude (Opus 4.8) — Block 3.2 complete
 
