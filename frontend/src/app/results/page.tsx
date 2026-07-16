@@ -993,7 +993,7 @@ export default function ResultsPage() {
           </div>
         </div>
         <p className="text-muted text-sm" style={{ marginTop: 24 }}>
-          Secure Checkout • Instant Lifetime Access • 100% Satisfaction Guarantee
+          Secure Checkout • Instant Lifetime Access • Every Step Cited to a Real NHTSA/OEM Source
         </p>
       </div>
     </main>

@@ -38,7 +38,7 @@ Do not commit if any of these fail. Fix forward; don't skip the check.
 | Block | Focus | Model | Thinking | Status |
 |---|---|---|---|---|
 | 1.1 | Fix stale/wrong price displays + `RAPP_GUIDE_FEE` calc bug + remove leaked jargon badge | Sonnet 5 | Medium | ✅ Done |
-| 1.2 | Resolve "100% Satisfaction Guarantee" vs. Terms-of-Service contradiction | Fable 5 | Low | ⬜ Not started |
+| 1.2 | Resolve "100% Satisfaction Guarantee" vs. Terms-of-Service contradiction | Fable 5 | Low | ✅ Done |
 | 1.3 | De-overclaim "Verified"/"Genuine"/"Exact fit" language | Haiku 5 | Low | ⬜ Not started |
 | 1.4 | Harden production email deliverability (fail loud, not silent) | Sonnet 5 | Low | ⬜ Not started |
 | 2.1 | Baseline funnel analytics (PostHog) | Sonnet 5 | Medium | ⬜ Not started |
@@ -460,3 +460,11 @@ Add a `dry_run` mode before trusting this on a real batch: write a small one-off
 - **Followed `part_2_blocks/block_1_1.md` verbatim**, including its correction over the parent plan (the second `RAPP_GUIDE_FEE` usage at the budget-footer line that the parent plan's summary missed).
 - **Tests**: `cd frontend && ./node_modules/.bin/next build` — compiled successfully, zero TS/ESLint errors (two pre-existing unrelated `react-hooks/exhaustive-deps` warnings on `repair/page.tsx`/`results/page.tsx` line 197, untouched by this block). `grep -n "RAPP_GUIDE_FEE" PartsPurchasePlan.tsx` → empty (both usages removed). `grep -n "39.00\|\$4.00\|Stage 2\."page.tsx` → only pre-existing internal JSX *comments* referencing "Stage 2.1/2.2/2.3/2.5" remain (lines 310/675/704/778) — not user-visible text and out of this block's specced scope (only the rendered badge at line 692 was in scope); left untouched per "Do NOT touch" guidance to avoid drift beyond the specced edits.
 - **Handoff**: no backend change, no other block touched. Next block per tracker: 1.2 (Satisfaction Guarantee vs. ToS contradiction).
+
+### 2026-07-16 — Antigravity — Block 1.2 complete
+
+- **Block**: 1.2 — Resolve "100% Satisfaction Guarantee" vs. Terms-of-Service contradiction. Status → ✅ Done.
+- **Files changed**: `frontend/src/app/results/page.tsx` (line 995: replaced `100% Satisfaction Guarantee` with `Every Step Cited to a Real NHTSA/OEM Source`). `docs/implementation/imp_part_2.md` (this tracker + log).
+- **Followed `part_2_blocks/block_1_2.md` verbatim**, leaving `terms/page.tsx` and all `<p>` tags/styles untouched.
+- **Tests**: `next build` — compiled successfully with zero TS/ESLint errors. `grep -rn "Satisfaction Guarantee\|100% Satisfaction" frontend/src` → empty. `terms/page.tsx` diff check → `OK: terms untouched`.
+- **Handoff**: no backend change, no other block touched. Next block per tracker: 1.3 (De-overclaim "Verified"/"Genuine"/"Exact fit" language).
