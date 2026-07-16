@@ -6,10 +6,8 @@ import type { RecommendedPart } from '@/lib/types';
 interface PartsPurchasePlanProps {
   parts: RecommendedPart[];
   vehicleTitle?: string;
+  guideFee?: number;
 }
-
-// Matches backend/pricing.py's RAPP guide fee used in cost_breakdown.diy_total.
-const RAPP_GUIDE_FEE = 4.0;
 
 interface DisplayOption {
   title: string;
@@ -64,7 +62,7 @@ function buildDisplayOptions(part: RecommendedPart): DisplayOption[] {
   ];
 }
 
-export default function PartsPurchasePlan({ parts, vehicleTitle }: PartsPurchasePlanProps) {
+export default function PartsPurchasePlan({ parts, vehicleTitle, guideFee = 4.99 }: PartsPurchasePlanProps) {
   // Per-part tier selection: index into buildDisplayOptions (0 = OEM,
   // 1 = Aftermarket). Defaults to Aftermarket so the initial total agrees
   // with the backend's budget-tier diy_total.
@@ -77,7 +75,7 @@ export default function PartsPurchasePlan({ parts, vehicleTitle }: PartsPurchase
     const opts = buildDisplayOptions(part);
     return sum + (opts[selectedFor(idx)]?.estimated_price ?? 0);
   }, 0);
-  const diyTotal = RAPP_GUIDE_FEE + partsTotal;
+  const diyTotal = guideFee + partsTotal;
 
   return (
     <div className="parts-purchase-plan" style={{ marginTop: 28 }}>
@@ -234,7 +232,7 @@ export default function PartsPurchasePlan({ parts, vehicleTitle }: PartsPurchase
         <div>
           <p className="card-label" style={{ margin: 0, color: 'var(--accent-orange)' }}>Your DIY Parts Budget</p>
           <p className="text-muted text-sm" style={{ margin: '4px 0 0' }}>
-            Selected parts ${partsTotal.toFixed(2)} + ${RAPP_GUIDE_FEE.toFixed(2)} RAPP guide fee
+            Selected parts ${partsTotal.toFixed(2)} + ${guideFee.toFixed(2)} RAPP guide fee
           </p>
         </div>
         <span style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-primary)' }}>
