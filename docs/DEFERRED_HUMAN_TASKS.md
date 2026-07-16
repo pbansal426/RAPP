@@ -104,10 +104,13 @@ Gemini calls as **blocked by default** and ask before running anything that spen
 **Human decisions / steps to revisit later:**
 - ⬜ **Quota:** Gemini free tier is only **20 requests/day per model** — a live VIN-scan session or a few repair
   generations can exhaust it. Move to a **paid Gemini tier** before real users.
-- ⬜ **Open product question:** do you want an **in-app warning/confirmation gate** before Gemini-spending actions
-  (e.g. "This will use an AI credit — continue?" before the `/repair` page generates, or before sending a chat)?
-  This is a *new feature*, out of scope for Block 2.1, and not yet built. If you want it, it should be scoped as
-  its own block. Flagged here so it isn't forgotten.
+- ✅ **In-app usage gate — BUILT (2026-07-16).** Gemini-spending actions are now blocked by default each browser
+  session until the user approves: the `/repair` page shows a "Generate guide with AI" consent card instead of
+  auto-generating, the Unlock-time warm-up is skipped until consent, and the repair chat prompts before the first
+  real AI reply. Implemented in `frontend/src/lib/aiConsent.ts` (+ `repair/page.tsx`, `results/page.tsx`,
+  `repair/ChatPanel.tsx`). Consent is session-scoped (resets each new browser session). *Note:* photo/scan VIN OCR
+  (`/api/vin/ocr`) and live-LLM diagnose are **not** yet behind this gate — extend `confirmAiUsage()` to those if
+  you want full coverage.
 
 ---
 

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AssistantIcon } from '@/app/sharedIcons';
 import { api } from '@/lib/api';
 import { useAuthUser } from '@/lib/auth';
+import { confirmAiUsage } from '@/lib/aiConsent';
 import type { RepairChatRequest, RepairChatResponse, VehicleInfo } from '@/lib/types';
 
 interface ChatPanelProps {
@@ -98,8 +99,12 @@ export default function ChatPanel({ vin, vinData, symptoms, repairSteps }: ChatP
     const canUseAi =
       (stripeSessionId || isSubscriber) && repairSteps.length > 0 && !aiLimitReached && getChatCount(vin) < MAX_AI_REPLIES_PER_VEHICLE;
 
+    // Sending a real chat message spends the live Gemini key. Gate the first
+    // AI reply this session behind explicit consent; if the user declines we
+    // fall through to the local zero-cost canned reply below. See
+    // @/lib/aiConsent + memory gemini-key-usage-blocked.
     let reply: string | null = null;
-    if (canUseAi) {
+    if (canUseAi && confirmAiUsage('answer your question about this repair')) {
       try {
         const body: RepairChatRequest = {
           vin,

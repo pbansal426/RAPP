@@ -11,6 +11,7 @@ import SaveGuidePrompt from './SaveGuidePrompt';
 import { useAuthUser, updateAccount } from '@/lib/auth';
 import { completePendingSave } from '@/lib/pendingSave';
 import { submitOutcome } from '@/lib/outcomes';
+import { hasAiConsent, grantAiConsent } from '@/lib/aiConsent';
 import type { RecommendedPart, VehicleInfo } from '@/lib/types';
 import {
   AppLogoMarkIcon,
@@ -48,6 +49,18 @@ type CheckpointState =
 const TORQUE_REGEX = /torque|tighten|ft-lbs|\bnm\b/i;
 const WIRING_REGEX = /wiring|harness|connector|\bpin\b|sensor|circuit/i;
 
+// Params captured when guide generation is deferred behind the AI-usage
+// consent gate (see @/lib/aiConsent) so the exact same call can run once the
+// user approves spending Gemini quota.
+interface PendingGeneration {
+  vin: string;
+  symptoms: string;
+  tools: string[];
+  sessionId: string;
+  vinData: VehicleInfo | null;
+  skill: string;
+}
+
 export default function RepairPage() {
   const router = useRouter();
   const [vin, setVin] = useState('');
@@ -60,6 +73,10 @@ export default function RepairPage() {
   const [unlocked, setUnlocked] = useState(false);
   const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({});
   const [parts, setParts] = useState<RecommendedPart[]>([]);
+  // Non-null when the repair guide still needs to be generated but the user
+  // hasn't yet approved spending Gemini quota this session -- drives the
+  // inline AI-usage consent card instead of auto-firing POST /api/repair.
+  const [pendingGeneration, setPendingGeneration] = useState<PendingGeneration | null>(null);
   const [showSavePrompt, setShowSavePrompt] = useState(false);
   const [savePromptDismissed, setSavePromptDismissed] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
@@ -141,6 +158,9 @@ export default function RepairPage() {
       `Switching to "${newSkill}" mode will regenerate your procedure steps tailored to this skill level. Continue?`
     );
     if (confirmed && vin) {
+      // The regenerate confirm above is itself explicit permission to spend
+      // Gemini quota -- record it so the chat/guide gate doesn't re-prompt.
+      grantAiConsent();
       if (typeof window !== 'undefined') {
         localStorage.removeItem(`rapp_repair_${vin}`);
         localStorage.removeItem(`rapp_repair_checked_${vin}`);
@@ -199,8 +219,32 @@ export default function RepairPage() {
       }
     }
 
-    generateAndCache(storedVin, storedSymptoms, tools, sessionId || '', parsedVinData, storedSkill);
+    // Generating the guide spends the live Gemini key. If the user already
+    // approved AI usage this session, generate immediately; otherwise defer
+    // and show the inline consent card (see pendingGeneration render below).
+    if (hasAiConsent()) {
+      generateAndCache(storedVin, storedSymptoms, tools, sessionId || '', parsedVinData, storedSkill);
+    } else {
+      setPendingGeneration({
+        vin: storedVin,
+        symptoms: storedSymptoms,
+        tools,
+        sessionId: sessionId || '',
+        vinData: parsedVinData,
+        skill: storedSkill,
+      });
+      setLoading(false);
+    }
   }, [router, authUser, authLoading]);
+
+  // Approve the deferred generation: record session consent and fire the call.
+  const approveGeneration = () => {
+    if (!pendingGeneration) return;
+    grantAiConsent();
+    const g = pendingGeneration;
+    setPendingGeneration(null);
+    generateAndCache(g.vin, g.symptoms, g.tools, g.sessionId, g.vinData, g.skill);
+  };
 
   const startOver = () => {
     if (!vin) return;
@@ -208,6 +252,8 @@ export default function RepairPage() {
       'Starting over clears your checked-off progress and regenerates this repair guide from scratch. Continue?'
     );
     if (!confirmed) return;
+    // Regenerating spends Gemini quota; the confirm above is the user's OK.
+    grantAiConsent();
     localStorage.removeItem(`rapp_repair_${vin}`);
     localStorage.removeItem(`rapp_repair_checked_${vin}`);
     setCheckedSteps({});
@@ -379,6 +425,37 @@ export default function RepairPage() {
           <h1 className="page-title">Clinic-Grade Repair &amp; Mod Guide</h1>
           {vin && <p className="page-subtitle">VIN: {vin} • Verified Procedure</p>}
         </header>
+
+        {pendingGeneration && !loading && !repair && (
+          <div
+            data-testid="ai-usage-gate"
+            className="card"
+            style={{
+              padding: '32px 28px',
+              borderLeft: '4px solid var(--accent-orange)',
+              background: 'rgba(249,115,22,0.08)',
+              marginTop: '16px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+              <BoltIcon />
+              <h2 style={{ margin: 0, fontSize: '1.15rem' }}>Generate your repair guide</h2>
+            </div>
+            <p className="text-muted" style={{ marginBottom: '20px' }}>
+              Building your personalized step-by-step procedure uses AI (the Gemini API), which
+              draws on this app’s API quota (the free tier allows roughly 20 requests per day).
+              Nothing is generated until you approve.
+            </p>
+            <button
+              type="button"
+              onClick={approveGeneration}
+              className="btn btn-primary"
+              style={{ minHeight: '48px', width: '100%' }}
+            >
+              Generate guide with AI
+            </button>
+          </div>
+        )}
 
         {loading && (
           <div className="card" style={{ textAlign: 'center', padding: '48px 28px' }}>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { track } from '@/lib/analytics';
+import { hasAiConsent } from '@/lib/aiConsent';
 import PartsPurchasePlan from './PartsPurchasePlan';
 import { requestMagicLink, useAuthUser, updateAccount } from '@/lib/auth';
 import { completePendingSave, storePendingSave } from '@/lib/pendingSave';
@@ -217,6 +218,11 @@ export default function ResultsPage() {
   // /repair load instantly instead of generating the guide after payment.
   const pregenerateRepairGuide = () => {
     if (!vin || localStorage.getItem(`rapp_repair_${vin}`)) return;
+    // Warming the guide spends the live Gemini key. Only pre-generate if the
+    // user already approved AI usage this session; otherwise defer entirely to
+    // the explicit consent gate on /repair, so clicking Unlock never silently
+    // burns Gemini quota. See @/lib/aiConsent + memory gemini-key-usage-blocked.
+    if (!hasAiConsent()) return;
     const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
     const obdCodes = JSON.parse(localStorage.getItem('rapp_obd_codes') ?? '[]') as string[];
     api.post<{ repair_steps: string[]; citations: string[] }>('/api/repair', {

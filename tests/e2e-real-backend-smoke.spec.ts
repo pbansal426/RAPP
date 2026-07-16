@@ -77,10 +77,18 @@ test.describe('Real backend + real frontend smoke test', () => {
     );
     expect(unlockedState).not.toBeNull();
 
-    // 5. Real POST /api/repair response renders. In test mode this is the
-    // template/generic fallback path (no Gemini, empty MockVectorStore), but
-    // the contract (repair_steps: string[], citations: string[]) is the
-    // same either way -- the page must render it without crashing.
+    // 5. AI-usage consent gate: guide generation is blocked by default each
+    // session so the live Gemini key is never spent without an explicit click
+    // (see frontend/src/lib/aiConsent.ts). Approve it to trigger the real
+    // POST /api/repair. In test mode this uses the template/generic fallback
+    // path (no Gemini, empty MockVectorStore), but the gate still gates it.
+    const aiGate = page.locator('[data-testid="ai-usage-gate"]');
+    await expect(aiGate).toBeVisible();
+    await aiGate.getByRole('button', { name: /Generate guide with AI/i }).click();
+
+    // 6. Real POST /api/repair response renders. The contract
+    // (repair_steps: string[], citations: string[]) is the same either way --
+    // the page must render it without crashing.
     await expect(page.locator('[data-testid="detailed-repair-steps"]')).toBeVisible();
     await expect(page.locator('[data-testid="rag-citation"]').first()).toBeVisible();
   });
