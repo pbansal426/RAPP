@@ -59,13 +59,17 @@ test.describe('Real backend + real frontend smoke test', () => {
     await expect(checkoutBtn).toBeVisible();
     await expect(checkoutBtn).toContainText(/Unlock/i);
 
-    // 4. Simulate the Stripe success redirect -- /api/repair only requires a
-    // non-empty stripe_session_id string (see backend/routers/repair.py),
-    // it never calls out to real Stripe.
-    await page.goto(
-      `/repair/success?session_id=cs_test_real_backend_smoke&vin=${encodeURIComponent(vin!)}`
-    );
-    await page.waitForURL((url) => url.pathname === '/repair');
+    // 4. Drive the real mock-checkout flow: POST /api/payments/create-checkout
+    // returns a mode:"mock" checkout_url pointing at the backend's own
+    // GET /api/payments/success-stub, which is what actually records the
+    // server-side DbGuideUnlock proof /api/repair checks below (see
+    // backend/routers/payments.py::success_stub) before 303-redirecting to
+    // /repair/success -> /repair. A hand-crafted /repair/success deep link
+    // (the old approach here) skips that HTTP round-trip entirely and never
+    // creates the unlock record.
+    await page.locator('[data-testid="agree-terms-checkbox"]').check();
+    await checkoutBtn.click();
+    await page.waitForURL((url) => url.pathname === '/repair', { timeout: 15_000 });
 
     const unlockedState = await page.evaluate(
       (v) => localStorage.getItem(`rapp_unlocked_${v}`),

@@ -222,26 +222,22 @@ export default function ResultsPage() {
     setPayLoading(true);
     pregenerateRepairGuide();
     try {
-      const { checkout_url, mode } = await api.post<CheckoutResponse>('/api/payments/create-checkout', {
+      const { checkout_url } = await api.post<CheckoutResponse>('/api/payments/create-checkout', {
         vin,
         price_type: priceType,
         symptoms,
       });
 
-      if (mode === 'live') {
-        // A real Checkout page hosted on Polar
-        window.location.href = checkout_url;
-        return;
-      }
-
-      // Mock stub: a backend URL that just 303s straight back to our success route
-      let sessionId = 'cs_test_stub';
-      try {
-        sessionId = new URL(checkout_url).searchParams.get('session_id') || sessionId;
-      } catch {
-        // checkout_url wasn't absolute — fall back to the stub session id
-      }
-      router.push(`/repair/success?session_id=${encodeURIComponent(sessionId)}&vin=${encodeURIComponent(vin)}&price_type=${priceType}`);
+      // Both "live" (a real Polar-hosted Checkout page) and "mock" (our own
+      // backend GET /api/payments/success-stub) require a genuine full-page
+      // navigation, not a client-side router.push. The mock URL isn't just a
+      // placeholder to parse a session_id out of -- visiting it is what
+      // actually records the server-side DbGuideUnlock proof (see
+      // backend/routers/payments.py::success_stub) before it 303s back to
+      // /repair/success. Skipping that hit (the previous behavior here)
+      // left every mock-mode purchase without a real unlock record, so
+      // POST /api/repair's 402 check failed right after "payment".
+      window.location.href = checkout_url;
     } catch {
       setPayLoading(false);
       alert('Payment service unavailable. Please try again.');

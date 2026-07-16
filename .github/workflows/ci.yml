@@ -120,12 +120,20 @@ jobs:
       # this job must NEVER dial out to live Gemini or a real ChromaDB.
       # GEMINI_API_KEY is deliberately left unset (no secret referenced here).
       # DATABASE_URL points outside the repo so this never touches data/.
+      # BACKEND_URL/FRONTEND_URL must match the non-default ports this job
+      # actually uses (8100/3100, to avoid colliding with the mock-app E2E
+      # job's 8000/3099) -- backend/services/payments_mor.py's
+      # build_mock_checkout_url()/build_success_redirect_url() embed these
+      # settings directly into the mock-checkout redirect chain, so a wrong
+      # port here means the browser navigates to a URL nothing listens on.
       - name: Start real backend (test mode)
         env:
           ENVIRONMENT: test
           VECTOR_STORE: mock
           DATABASE_URL: "sqlite:////tmp/rapp_ci_real_backend.db"
           ALLOWED_ORIGINS: "http://localhost:3100,http://127.0.0.1:3100"
+          BACKEND_URL: "http://127.0.0.1:8100"
+          FRONTEND_URL: "http://127.0.0.1:3100"
         run: |
           uv run uvicorn backend.main:app --host 127.0.0.1 --port 8100 > backend.log 2>&1 &
           echo $! > backend.pid
