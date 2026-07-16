@@ -1,5 +1,8 @@
 # Implementation Plan Part 2 — Per-Block Execution Specs
 
+> [!IMPORTANT]
+> These `block_<N>_<M>.md` files ARE the blocks referenced by any bare **"execute 1.1"** / **"block 2.3"** instruction — those always mean **Part 2** (this directory's parent, [`../imp_part_2.md`](../imp_part_2.md)), the active plan. Part 1 ([`../imp.md`](../imp.md)) is complete and uses different labels (`"Stage X.Y"`, single-number `"Block N"`). Full disambiguation table: `CLAUDE.md` → Step 1.
+
 **Parent plan**: [`../imp_part_2.md`](../imp_part_2.md)
 **Created**: 2026-07-16
 **Purpose**: One self-contained, code-verified execution doc per block of `imp_part_2.md`. Each file expands its block into an *exact* set of edits — verified against the real codebase on 2026-07-16 — so an executing agent (often a smaller/cheaper model) can complete the block **without reading anything else and without making a judgment call the plan didn't already make for it.**

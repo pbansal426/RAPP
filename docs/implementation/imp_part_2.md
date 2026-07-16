@@ -5,7 +5,12 @@
 **Origin**: A full-app audit (structural + copy/trust/correctness) run across two parallel sub-agents plus direct code inspection, requested explicitly to find "smaller flaws with huge impact" before considering any production launch. This is NOT a new-feature roadmap — every block below is a fix to something that already exists and is already wired into the live app.
 
 > [!IMPORTANT]
-> **MANDATORY FOR ALL AI AGENTS**: Follow the same 4-step operational protocol as `imp.md` (see `CLAUDE.md`): read this file's active block before touching code, never silently alter scope, lint/typecheck before committing, and log your session in **Section 5** below before finishing.
+> ## ⬅ THIS IS THE ACTIVE IMPLEMENTATION PLAN
+> When you are told **"execute 1.1"**, **"do block 2.3"**, or **any bare/two-level block number** (`1.1`–`3.2`), it refers to a block **in this document**. Part 1 ([`imp.md`](imp.md)) is 100% complete and is no longer executed — its `"Stage X.Y"` / single-number `"Block N"` labels are historical. If you're ever unsure which plan a bare number means, see the disambiguation table in `CLAUDE.md` → Step 1.
+>
+> **To execute a block you MUST open its field manual [`part_2_blocks/block_<N>_<M>.md`](part_2_blocks/) FIRST** (see §0 below) — it overrides this file on any conflict.
+>
+> **MANDATORY FOR ALL AI AGENTS**: Follow the same 5-step operational protocol as `imp.md` (see `CLAUDE.md`): read this file's active block (and its field manual) before touching code, never silently alter scope, lint/typecheck before committing, log your session in **Section 5** below — and **leave git clean & merged, before and after** (CLAUDE.md **Step 5**: no stray worktrees, no unmerged branches, no uncommitted changes, no open PRs when you finish).
 
 ---
 

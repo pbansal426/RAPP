@@ -12,13 +12,24 @@ Every AI agent (Claude Code, Antigravity, Jules, or general Gemini instances) wo
 
 1. **Step 1: Session Initialization (Read-First & Workspace Check)**
    - Run `git status` to verify you are starting with a clean working tree. If there are uncommitted discrepancies from a prior agent, resolve or stash them before beginning your block.
-   - Before writing or modifying any code, read [`docs/implementation/imp.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/imp.md) to identify the active implementation block and priority items.
-   - **⭐ If you are told to execute a "Part 2" block (any block numbered 1.1–1.4, 2.1–2.4, or 3.1–3.2 from `docs/implementation/imp_part_2.md`), you MUST FIRST open its dedicated, code-verified execution spec at [`docs/implementation/part_2_blocks/block_<N>_<M>.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/part_2_blocks/) (e.g. block 1.1 → `part_2_blocks/block_1_1.md`).** That file contains the exact edits, current-code snippets, gotchas, and corrections for the block, and **overrides `imp_part_2.md` on any conflict** (it fixes stale line numbers/strings the parent plan missed). Start with `part_2_blocks/README.md` if you're unsure which file maps to your block. Do not begin editing from `imp_part_2.md` alone.
-   - You MUST work **strictly within the active phase/block**. Do not jump to Stage 2 or Stage 3 tasks if Stage 1 items are pending or unverified.
+   - **⭐⭐ WHICH PLAN AM I EXECUTING FROM? — resolve this BEFORE interpreting any block number.** Two implementation plans exist and their numbering overlaps, so a bare instruction like *"execute 1.1"* is ambiguous on its face. This table is authoritative:
+
+     | If you were told… | It means | Doc to open | Status |
+     |---|---|---|---|
+     | "execute 1.1", "do block 2.3", **any bare two-level number** `1.1`–`3.2` | a **Part 2** block | `docs/implementation/imp_part_2.md` → then its field manual | **✅ ACTIVE — this is the default** |
+     | "Part 2 block 1.1", "imp_part_2 1.1" | a **Part 2** block | same as above | ACTIVE |
+     | **"Stage 1.1"**, "Stage 2.4" (the literal word *Stage*) | a Part 1 roadmap stage | `docs/implementation/imp.md` | ✔️ COMPLETE — read-only/historical |
+     | **single-number** "Block 1" … "Block 8" | a Part 1 execution block | `docs/implementation/imp.md` | ✔️ COMPLETE — read-only/historical |
+
+     **Default rule: a bare block number ALWAYS means the ACTIVE plan — Part 2, [`docs/implementation/imp_part_2.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/imp_part_2.md).** Part 1 ([`imp.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/imp.md)) is **100% complete (15/15)** — you **never execute work out of it**; open it only for historical context. If a request is *still* genuinely ambiguous after applying this table, **STOP and ask the user which plan** — do not guess and start editing.
+
+   - Before writing or modifying any code, read the plan doc for your block to identify the active block and priority items — **`imp_part_2.md` for Part 2 work** (the normal case); `imp.md` only if the user explicitly sends you back into completed Part 1 work.
+   - **⭐ To execute a Part 2 block you MUST FIRST open its dedicated, code-verified execution spec at [`docs/implementation/part_2_blocks/block_<N>_<M>.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/part_2_blocks/) (e.g. block 1.1 → `part_2_blocks/block_1_1.md`; index in `part_2_blocks/README.md`).** That file has the exact edits, current-code snippets, gotchas, and corrections, and **overrides `imp_part_2.md` on any conflict** (it fixes stale line numbers/strings the parent plan missed). Do not begin editing from `imp_part_2.md` alone. When done, flip the block's row in `imp_part_2.md` §1 to `✅ Done` and log the session in §5 (Step 4).
+   - You MUST work **strictly within the active block**. Do not jump ahead to other blocks while the current one is pending or unverified.
    - Check existing architectural boundaries in `CLAUDE.md`.
 
 2. **Step 2: Strict Plan Adherence & Zero Silent Drift**
-   - Follow the step-by-step specifications defined in [`docs/implementation/imp.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/imp.md).
+   - Follow the step-by-step specifications defined in your block's plan doc — for Part 2 work, the field manual [`docs/implementation/part_2_blocks/block_<N>_<M>.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/part_2_blocks/) (which overrides [`imp_part_2.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/imp_part_2.md) on conflict); for historical Part 1 context, [`docs/implementation/imp.md`](file:///Users/prathambansal/dev/rapp/docs/implementation/imp.md).
    - If you discover a technical blocker, scope issue, or reason why a planned task cannot/should not be executed as written, **DO NOT silently skip, downgrade, or alter the feature**. Instead, stop, explain the trade-off clearly to the user, and use the `/log-decision` workflow (see [`docs/UPDATED_PRODUCT_NORTH_STAR.md`](file:///Users/prathambansal/dev/rapp/docs/UPDATED_PRODUCT_NORTH_STAR.md) Section 12) to formally document the pivot.
 
 3. **Step 3: Quality Control & Mandatory Git Commits**
@@ -31,6 +42,33 @@ Every AI agent (Claude Code, Antigravity, Jules, or general Gemini instances) wo
      - **`docs/implementation/imp.md`**: Check off completed tasks (`[x]`), update the progress percentage table, and append a new entry to **Section 6: Active Execution Log & AI Session Audit Trail** documenting: date/timestamp, your agent model (`Claude Opus 5`, `Sonnet`, etc.), exact files changed, tests executed/results, and precise handoff status for the next block.
      - **`docs/UPDATED_PRODUCT_NORTH_STAR.md`**: If any structural decision or pricing/schema change occurred during the block, append it to **Section 12: Architectural & Product Decision Log** per the `/log-decision` workflow.
      - **`docs/MODEL_ASSIGNMENT_GUIDE.md`**: Mark the completed Task Block (`Block 1`, `Block 2`, etc.) as ✅ **COMPLETED** in the Master Cheat Sheet table so the human owner always knows exactly which blocks remain.
+
+5. **Step 5: Git Hygiene — Clean & Merged, Before AND After (NON-NEGOTIABLE)**
+
+   The repository owner must **never** have to clean up after you — no stray worktrees, no unmerged branches, no uncommitted changes, no abandoned PRs. Leaving any of these is a failed session even if the code is correct. Satisfy **both** gates below.
+
+   **① START gate — before you touch any code:**
+   - `git -C <main-checkout> status` is clean (working tree + index). If a prior agent left changes, resolve/commit them or STOP and tell the user — do not build on top of a dirty tree.
+   - Sync main: `git -C <main-checkout> pull --ff-only`.
+   - Isolate your work in **exactly one** worktree/branch cut from up-to-date `origin/main`. One block → one branch → one worktree. Never reuse another block's branch or work directly on `main`.
+
+   **② END gate — before you report the block done (run in this order, do not skip):**
+   1. **Nothing uncommitted anywhere.** `git status` shows a clean tree — every file that belongs to the block is committed; every stray/scratch file (dry-run scripts, logs, `*.pid`) is deleted or gitignored, not committed. Never `git add -A`; stage explicit paths.
+   2. **Push** the branch.
+   3. **Open the PR**, then wait for CI: `gh pr checks <n> --watch`. **Do not merge red.** If CI fails, fix forward on the same branch.
+   4. **Merge it** once green: `gh pr merge <n> --squash --delete-branch`. (This project's owner works solo and wants blocks landed, not left in review — merge your own green PR; do not leave it open "for review" unless the user explicitly asked you to.)
+   5. **Remove the worktree and delete the branch** so nothing lingers on disk:
+      - Claude Code harness worktree (under `.claude/worktrees/`): use **`ExitWorktree` with `action: "remove"`** at the very end (it deletes the worktree dir + branch). For *other* stale worktrees you created, `git worktree remove <path>` then `git branch -d <branch>` (and `git push origin --delete <branch>` if the remote branch survived the merge).
+      - `--delete-branch` on merge already removes the remote branch and the local branch when not checked out; the worktree dir itself still must be removed explicitly.
+   6. **Verify the clean end-state and paste the proof into your final message:**
+      ```bash
+      git -C <main-checkout> pull --ff-only && git -C <main-checkout> status   # clean, on main, up to date
+      git worktree list      # ONLY the main checkout should remain (plus your own, removed on exit)
+      git branch --merged origin/main | grep -v '^\*\| main$'   # should be empty — no leftover merged branches
+      ```
+      If `git worktree list` shows a leftover block worktree or `git branch` shows a merged block branch, **remove it now** — that is exactly the mess this step exists to prevent.
+
+   **Never leave behind:** an open/abandoned PR, a merged-but-undeleted branch (local or remote), a worktree on disk whose work is already merged, or uncommitted/untracked changes in any checkout. If you cannot complete a gate (e.g. CI is stuck, a merge conflict needs a human call), STOP and tell the user exactly what remains and the single command to finish it — do not silently leave it half-done.
 
 ## Commands
 
