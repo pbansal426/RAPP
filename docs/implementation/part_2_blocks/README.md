@@ -47,6 +47,8 @@ Follow the parent plan's ordering — Stage 1 (trust/correctness) first, then St
 | 4.2 | [block_4_2.md](block_4_2.md) | UX interaction polish & state preservation | Sonnet 5 | Medium |
 | 4.3 | [block_4_3.md](block_4_3.md) | Accessibility, mobile touch, & `.HEIC` OOM hardening | Sonnet 5 | Medium |
 | 4.4 | [block_4_4.md](block_4_4.md) | Backend boundary validation & rate limits | Sonnet 5 | Medium |
+| 4.5 | [block_4_5.md](block_4_5.md) | Results-page fabricated claims & pre-passed safety checklist | Sonnet 5 | Medium |
+| 4.6 | [block_4_6.md](block_4_6.md) | Theme/design coherence pass — light mode, emoji, native dialogs, jargon | Sonnet 5 | Medium |
 
 ---
 

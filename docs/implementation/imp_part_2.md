@@ -51,6 +51,8 @@ Do not commit if any of these fail. Fix forward; don't skip the check.
 | 4.2 | UX interaction polish & state preservation (YMM resets, 402 warm-up loop, OCR locks, Copy Summary, Start Over banner, dynamic tool fallbacks) | Sonnet 5 | Medium | ⬜ Not started |
 | 4.3 | Accessibility (`a11y`), mobile touch/keyboard overlap, & `.HEIC` OOM leak hardening | Sonnet 5 | Medium | ⬜ Not started |
 | 4.4 | Backend boundary validation, typing resilience (`price_type`, `symptoms`), & rate limits | Sonnet 5 | Medium | ⬜ Not started |
+| 4.5 | Results-page fabricated claims & pre-passed safety checklist (leftover after Blocks 1.1/1.3) | Sonnet 5 | Medium | ⬜ Not started |
+| 4.6 | Theme/design coherence pass — broken light mode, remaining emoji/native dialogs, jargon leak | Sonnet 5 | Medium | ⬜ Not started |
 
 Update the Status column to `✅ Done` as each block completes, and log the session in Section 5.
 
@@ -550,6 +552,45 @@ Add a `dry_run` mode before trusting this on a real batch: write a small one-off
 3. Add IP-based rate limiting (e.g. `20 requests/minute`) on `GET /api/vin/{vin}` in `backend/routers/vin.py`.
 
 **Verification**: Run `uv run ruff check backend/ && uv run black --check backend/ && uv run mypy backend/ && uv run pytest tests/unit/ -v`.
+
+---
+
+### 4.5 Results-page fabricated claims & pre-passed safety checklist
+**Model: Sonnet 5, Thinking: Medium**
+**Field Manual**: [`part_2_blocks/block_4_5.md`](part_2_blocks/block_4_5.md)
+
+**Origin**: a full page-by-page frontend "trust vibes" audit (requested explicitly to make the app read as an authentic, trustable authority handling someone's vehicle rather than a gimmicky sales funnel), run after Blocks 1.1–1.3 had already landed. Blocks 1.1–1.3 fixed the stale-price fallbacks and the "Verified"/"Genuine"/"Exact fit" overclaim language — this block catches four items that survived those passes because they don't match the string patterns those blocks' `grep` verifications checked for, plus one item (the pre-passed checklist) that's a state-default bug, not a copy string.
+
+**Problem**:
+1. `results/page.tsx:460` shows a hardcoded **"$1,200+"** estimated collateral-damage figure on every single high-risk diagnosis, regardless of vehicle, symptom, or the real `cost_breakdown` data already available on the same page — it is not computed from anything and looks like a real number.
+2. `results/page.tsx:72-73` — `toolsReady`/`timeReady` both default to `useState<boolean>(true)`, so the "Pre-Job Readiness & Competence Quiz" card shows a green **"Readiness Score: 100% — Verified Ready for DIY Execution"** the instant the page loads, before the user has read or checked anything. A safety checklist that's pre-passed defeats its own purpose.
+3. `results/page.tsx:609` still reads *"Save up to 85% today with exact step-by-step guidance & **verified parts**"* — Block 1.3's verification grep checked for the capitalized phrase `"Verified Parts"` and missed this lowercase in-sentence instance, which has the identical problem (no fitment/inventory verification exists anywhere in the code) plus an unrelated flat "85%" figure that doesn't vary with the real numbers already computed just above it.
+4. `PartsPurchasePlan.tsx`'s `buildDisplayOptions` hardcodes specific consumer brand-name endorsements (`'Mobil 1 / Castrol'`, `'Valvoline / Pennzoil'`) for any oil/fluid/filter part, regardless of what the backend actually recommended — presented as a confident purchase recommendation with no product-matching logic behind it.
+
+**Exact changes**: see the field manual — it includes verified current-code snippets and exact replacement text for all four items, plus the verification `grep`s.
+
+**Verification**: `grep -n "1,200\|Save up to 85%" frontend/src/app/results/page.tsx` and `grep -n "Mobil 1\|Castrol\|Valvoline\|Pennzoil" frontend/src/app/results/PartsPurchasePlan.tsx` should both return nothing. Confirm `toolsReady`/`timeReady` both read `useState<boolean>(false)`. On a fresh `/results` load with no prior interaction, the readiness card must show "Action Required" (not "100% — Verified Ready") until both boxes are manually checked. `cd frontend && ./node_modules/.bin/next build` — zero TS/ESLint errors.
+
+---
+
+### 4.6 Theme/design coherence pass
+**Model: Sonnet 5, Thinking: Medium**
+**Field Manual**: [`part_2_blocks/block_4_6.md`](part_2_blocks/block_4_6.md)
+
+**Origin**: same full-app "trust vibes" audit as Block 4.5 above.
+
+**Problem**:
+1. **Light mode is functionally broken on `/results` and `/repair`.** `globals.css` defines a complete theme-token system (`--text-primary`, `--text-secondary`, `--bg-surface`, `--bg-elevated`, `--overlay-04/05/08/12`, `--accent-*`) specifically so pages render correctly in both themes — but `results/page.tsx`, `repair/page.tsx`, and `results/PartsPurchasePlan.tsx` bypass it extensively with inline hardcoded hex/rgba values (a direct count found 15 occurrences of `#fff` and 8 of `#f1f5f9` in `results/page.tsx` alone, with dozens more one-off `rgba(...)` overlays across all three files). Switching to light mode leaves large sections of the app's two highest-stakes screens — the paywall and the actual repair procedure — rendering dark-mode colors on a light background, producing broken contrast.
+2. **Emoji still in production chrome**, inconsistent with the rest of the app's icon-driven visual language (`sharedIcons.tsx`): `repair/success/page.tsx:26` (giant "✅"), `results/page.tsx:946` ("⭐ Annual Pass"), `ChatPanel.tsx:148` ("⚠️" quota banner).
+3. **One remaining native `window.confirm()`**: `repair/page.tsx:157` inside `handleSwitchSkillLevel` (Block 4.2 already converts the *other* `window.confirm` in this same file, inside `startOver` at line 224 — do not duplicate that one; this block only converts the skill-switch confirm, following the same inline-banner pattern for visual consistency).
+4. **One remaining native `alert()`**: `results/page.tsx:258`, inside `handlePay`'s catch block — a raw browser alert box breaking the app's chrome mid-checkout, the worst possible place for it.
+5. **Internal implementation jargon leaked to users**: `repair/page.tsx:404`'s loading state reads *"Retrieving vector-verified repair procedures from **ChromaDB**…"* — `ChromaDB` is the name of the internal vector-database library (see `CLAUDE.md`'s RAG isolation rule) and should never appear in user-facing copy.
+
+**Sequencing note**: this block assumes Blocks 4.1–4.5 have already landed (matches this doc's existing sequential-execution assumption). It touches some of the same files as Block 4.2 (`repair/page.tsx`, `ChatPanel.tsx`, `results/page.tsx`) — if 4.2 has not landed yet when this block executes, see the field manual's coordination note for item 3.
+
+**Exact changes**: see the field manual — it includes a full hardcoded-color → CSS-token mapping table (with explicit "leave alone" exceptions for colors on theme-invariant surfaces, e.g. white text on the permanently-orange CTA button), verified current-code snippets for all 6 items, and the verification `grep`s.
+
+**Verification**: `grep -oE "#[0-9a-fA-F]{3,6}" frontend/src/app/results/page.tsx frontend/src/app/repair/page.tsx frontend/src/app/results/PartsPurchasePlan.tsx | grep -v "var(--"` — every remaining match must be one of the field manual's explicitly-documented exceptions. `grep -rn "✅\|⭐\|⚠️" frontend/src/app/repair/success/page.tsx frontend/src/app/results/page.tsx frontend/src/app/repair/ChatPanel.tsx` and `grep -n "ChromaDB" frontend/src/app/repair/page.tsx` should both return nothing. `grep -n "window.confirm\|alert(" frontend/src/app/repair/page.tsx frontend/src/app/results/page.tsx` should show zero hits in either file. Manually toggle to light mode on `/results` and `/repair` with populated localStorage state and visually confirm no illegible-contrast regions remain. `cd frontend && ./node_modules/.bin/next build` — zero TS/ESLint errors.
 
 ---
 
