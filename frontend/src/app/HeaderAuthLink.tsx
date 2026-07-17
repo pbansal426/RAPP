@@ -22,6 +22,8 @@ export default function HeaderAuthLink() {
           replaces this whole corner widget -- see globals.css's design
           tokens and lib/theme.ts. */}
       <ThemeToggle />
+      <a href="/hub" style={{ ...linkStyle, color: 'var(--text-secondary)' }}>Guides</a>
+      <a href="/check-ai" style={{ ...linkStyle, color: 'var(--text-secondary)' }}>Check My AI Answer</a>
       {configured && !loading && (
         user ? (
           <>
