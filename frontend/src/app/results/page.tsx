@@ -66,6 +66,7 @@ export default function ResultsPage() {
   const [payLoading, setPayLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const [ownedTools, setOwnedTools] = useState<string[]>([]);
   const { user: authUser } = useAuthUser();
@@ -217,6 +218,13 @@ export default function ResultsPage() {
   // /repair load instantly instead of generating the guide after payment.
   const pregenerateRepairGuide = () => {
     if (!vin || localStorage.getItem(`rapp_repair_${vin}`)) return;
+    const existingUnlock = localStorage.getItem(`rapp_unlocked_${vin}`);
+    const isSubscriber = authUser?.subscriptionStatus === 'active';
+    // Without a valid unlock proof or active subscription the backend
+    // returns HTTP 402 for every /api/repair call -- firing it here just
+    // pollutes the console with a guaranteed error and never warms anything.
+    // The real generation happens on /repair once payment completes.
+    if (!existingUnlock && !isSubscriber) return;
     const tools = safeGetJson<string[]>('rapp_tools', []);
     const obdCodes = safeGetJson<string[]>('rapp_obd_codes', []);
     api.post<{ repair_steps: string[]; citations: string[] }>('/api/repair', {
@@ -224,12 +232,40 @@ export default function ResultsPage() {
       symptoms,
       obd_codes: obdCodes,
       tools,
-      stripe_session_id: 'pregenerate-on-intent',
+      stripe_session_id: existingUnlock || 'pregenerate-on-intent',
       vehicle: vinData,
       skill_level: skillLevel,
     })
       .then((res) => localStorage.setItem(`rapp_repair_${vin}`, JSON.stringify(res)))
       .catch(() => { /* best-effort only -- /repair falls back to its own fetch */ });
+  };
+
+  const handleCopyDiagnosis = () => {
+    if (!diagnosis) return;
+    const cb = diagnosis.cost_breakdown;
+    const parts = diagnosis.recommended_parts ?? [];
+    const vehicle = vinData
+      ? [vinData.year, vinData.make, vinData.model].filter(Boolean).join(' ')
+      : '';
+    const lines = [
+      `RAPP Free Diagnosis — VIN ${vin}`,
+      vehicle ? `Vehicle: ${vehicle}` : '',
+      symptoms ? `Reported: ${symptoms}` : '',
+      '',
+      `Summary: ${diagnosis.summary}`,
+      diagnosis.is_high_risk && diagnosis.warning_message
+        ? `High-Risk: ${diagnosis.warning_message}`
+        : '',
+      parts.length ? `\nRecommended parts:\n${parts.map((p) => `- ${p.part_name}`).join('\n')}` : '',
+      cb
+        ? `\nEstimated DIY cost: $${cb.diy_total.toFixed(2)} (dealership avg ~$${Math.round(
+            (cb.dealership_cost_range[0] + cb.dealership_cost_range[1]) / 2,
+          )})`
+        : '',
+    ].filter(Boolean);
+    navigator.clipboard.writeText(lines.join('\n'));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const handlePay = async (priceType: 'single' | 'annual') => {
@@ -443,9 +479,21 @@ export default function ResultsPage() {
 
       {/* ── Free diagnosis summary ── */}
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
           <p className="card-label" style={{ margin: 0 }}>Free Diagnosis & Mod Overview</p>
-          <span className="badge badge-free">AI-Generated, RAG-Grounded Analysis</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {diagnosis && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleCopyDiagnosis}
+                style={{ width: 'auto', minHeight: 48, padding: '0 14px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                {copied ? <><CheckCircleIcon size={14} style={{ color: '#4ade80' }} /> Copied!</> : 'Copy Summary'}
+              </button>
+            )}
+            <span className="badge badge-free">AI-Generated, RAG-Grounded Analysis</span>
+          </div>
         </div>
 
         <div data-testid="free-diagnosis-summary">

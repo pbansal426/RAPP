@@ -76,6 +76,7 @@ export default function RepairPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [unlocked, setUnlocked] = useState(false);
+  const [confirmingStartOver, setConfirmingStartOver] = useState(false);
   const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({});
   const [parts, setParts] = useState<RecommendedPart[]>([]);
   const [showSavePrompt, setShowSavePrompt] = useState(false);
@@ -212,12 +213,9 @@ export default function RepairPage() {
     generateAndCache(storedVin, storedSymptoms, tools, sessionId || '', parsedVinData, storedSkill);
   }, [router, authUser, authLoading]);
 
-  const startOver = () => {
+  const executeStartOver = () => {
     if (!vin) return;
-    const confirmed = window.confirm(
-      'Starting over clears your checked-off progress and regenerates this repair guide from scratch. Continue?'
-    );
-    if (!confirmed) return;
+    setConfirmingStartOver(false);
     localStorage.removeItem(`rapp_repair_${vin}`);
     localStorage.removeItem(`rapp_repair_checked_${vin}`);
     setCheckedSteps({});
@@ -373,17 +371,51 @@ export default function RepairPage() {
           >
             ← Back to Results
           </button>
-          {repair && (
+          {repair && !confirmingStartOver && (
             <button
               className="btn btn-secondary"
               type="button"
-              onClick={startOver}
+              onClick={() => setConfirmingStartOver(true)}
               style={{ padding: '6px 12px', fontSize: '0.875rem', marginLeft: 8 }}
             >
-              Start Over
+              ↻ Start Over
             </button>
           )}
         </div>
+
+        {repair && confirmingStartOver && (
+          <div
+            role="alertdialog"
+            aria-label="Confirm start over"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              flexWrap: 'wrap', gap: 12, margin: '0 0 12px', padding: '12px 16px',
+              borderRadius: 8, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
+            }}
+          >
+            <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+              Start over and clear all checked-off progress? This regenerates the guide from scratch.
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={executeStartOver}
+                style={{ width: 'auto', minHeight: 48, padding: '0 14px', fontSize: '0.85rem', background: '#ef4444' }}
+              >
+                Yes, Reset
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setConfirmingStartOver(false)}
+                style={{ width: 'auto', minHeight: 48, padding: '0 14px', fontSize: '0.85rem' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         <header className="page-header">
           <div className="logo"><AppLogoMarkIcon size={20} /><span>RAPP</span></div>

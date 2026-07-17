@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AssistantIcon } from '@/app/sharedIcons';
 import { api } from '@/lib/api';
 import { useAuthUser } from '@/lib/auth';
+import { safeGetJson } from '@/lib/storage';
 import type { RepairChatRequest, RepairChatResponse, VehicleInfo } from '@/lib/types';
 
 interface ChatPanelProps {
@@ -56,7 +57,15 @@ function cannedReply(userMsg: string): string {
     return 'OEM Specification: Coil pack mounting bolts torque to 7.5 ft-lbs (10 Nm). Spark plugs torque to 15 ft-lbs (20 Nm) on aluminum heads.';
   }
   if (lower.includes('socket') || lower.includes('tool') || lower.includes('wrench') || lower.includes('size')) {
-    return 'Required tools: 10mm deep socket, 3-inch extension, 3/8-inch drive ratchet. If changing plugs, use a 5/8-inch spark plug socket.';
+    // rapp_tools holds checkbox ids like "tool-socket-set" / "brand-milwaukee";
+    // humanize them ("Socket Set") for a readable fallback callout.
+    const cachedTools = safeGetJson<string[]>('rapp_tools', [])
+      .map((id) => id.replace(/^(tool|brand|spec)-/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
+      .filter(Boolean);
+    const toolCallout = cachedTools.length > 0
+      ? `Your selected job tools include: ${cachedTools.join(', ')}.`
+      : 'Required tools: 10mm deep socket, 3-inch extension, 3/8-inch drive ratchet. If changing plugs, use a 5/8-inch spark plug socket.';
+    return `${toolCallout} Always check bolt-head clearances before applying torque.`;
   }
   if (lower.includes('corro') || lower.includes('connector')) {
     return 'If you see corrosion on a connector, clean it with electrical contact cleaner and a small brass brush before reconnecting — don’t force a corroded plug.';

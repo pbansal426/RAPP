@@ -6,6 +6,10 @@ interface VinCropModalProps {
   imageUrl: string;
   onConfirm: (canvas: HTMLCanvasElement) => void;
   onCancel: () => void;
+  /** True while the parent is running OCR on the confirmed crop -- locks
+   *  all drag/close interactions so a stray click can't re-trigger or
+   *  dismiss a scan already in flight. */
+  processing?: boolean;
 }
 
 interface Rect {
@@ -74,7 +78,7 @@ function preprocess(canvas: HTMLCanvasElement): void {
   ctx.putImageData(imageData, 0, 0);
 }
 
-export default function VinCropModal({ imageUrl, onConfirm, onCancel }: VinCropModalProps) {
+export default function VinCropModal({ imageUrl, onConfirm, onCancel, processing = false }: VinCropModalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const [rect, setRect] = useState<Rect>(DEFAULT_RECT);
@@ -116,6 +120,7 @@ export default function VinCropModal({ imageUrl, onConfirm, onCancel }: VinCropM
   };
 
   const handleConfirm = () => {
+    if (processing) return;
     const img = imgRef.current;
     if (!img) return;
     const r = rect.width > 0.02 && rect.height > 0.02 ? rect : { x: 0, y: 0, width: 1, height: 1 };
@@ -173,8 +178,10 @@ export default function VinCropModal({ imageUrl, onConfirm, onCancel }: VinCropM
           maxWidth: '90vw',
           maxHeight: '60vh',
           touchAction: 'none',
-          cursor: 'crosshair',
+          cursor: processing ? 'default' : 'crosshair',
           lineHeight: 0,
+          pointerEvents: processing ? 'none' : 'auto',
+          opacity: processing ? 0.7 : 1,
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -201,14 +208,14 @@ export default function VinCropModal({ imageUrl, onConfirm, onCancel }: VinCropM
       </div>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <button type="button" className="btn btn-secondary" style={{ width: 'auto', padding: '0 18px', minHeight: 48 }} onClick={onCancel}>
+        <button type="button" className="btn btn-secondary" style={{ width: 'auto', padding: '0 18px', minHeight: 48 }} onClick={onCancel} disabled={processing}>
           Cancel
         </button>
-        <button type="button" className="btn btn-secondary" style={{ width: 'auto', padding: '0 18px', minHeight: 48 }} onClick={handleUseFullPhoto}>
+        <button type="button" className="btn btn-secondary" style={{ width: 'auto', padding: '0 18px', minHeight: 48 }} onClick={handleUseFullPhoto} disabled={processing}>
           Use Whole Photo
         </button>
-        <button type="button" className="btn btn-primary" style={{ width: 'auto', padding: '0 18px', minHeight: 48 }} onClick={handleConfirm}>
-          Scan Cropped Area →
+        <button type="button" className="btn btn-primary" style={{ width: 'auto', padding: '0 18px', minHeight: 48 }} onClick={handleConfirm} disabled={processing}>
+          {processing ? <><span className="loading-spinner" aria-hidden="true" /> Reading VIN tag…</> : 'Scan Cropped Area →'}
         </button>
       </div>
     </div>

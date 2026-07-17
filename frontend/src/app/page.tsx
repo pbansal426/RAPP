@@ -41,6 +41,10 @@ export default function HomePage() {
   const [vin, setVin] = useState('');
   const [loading, setLoading] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
+  // True only while Tesseract is running on a confirmed crop -- distinct from
+  // ocrLoading, which stays true the whole time the crop modal is open waiting
+  // for the user to draw a box. Locks the modal during the actual OCR pass.
+  const [cropProcessing, setCropProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
 
@@ -108,7 +112,11 @@ export default function HomePage() {
   }, [selectedYear, selectedMake]);
 
   const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedYear(e.target.value);
+    const val = e.target.value;
+    // Re-selecting the same year must not wipe the make/model/trim the user
+    // has already chosen underneath it.
+    if (val === selectedYear) return;
+    setSelectedYear(val);
     setSelectedMake('');
     setSelectedModel('');
     setSelectedTrim('');
@@ -117,7 +125,9 @@ export default function HomePage() {
   };
 
   const handleMakeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedMake(e.target.value);
+    const val = e.target.value;
+    if (val === selectedMake) return;
+    setSelectedMake(val);
     setSelectedModel('');
     setSelectedTrim('');
     setSelectedDriveType('');
@@ -270,8 +280,10 @@ export default function HomePage() {
   };
 
   const handleCropConfirm = async (canvas: HTMLCanvasElement) => {
-    if (cropImageUrl) URL.revokeObjectURL(cropImageUrl);
-    setCropImageUrl(null);
+    // Keep the modal mounted (locked via processing) until OCR finishes so a
+    // stray second click can't re-enter this or dismiss a scan in flight.
+    if (cropProcessing) return;
+    setCropProcessing(true);
     try {
       const { createWorker, PSM } = await import('tesseract.js');
       const worker = await createWorker('eng');
@@ -296,6 +308,9 @@ export default function HomePage() {
       console.error(err);
       setError('Could not read the image. Please enter the VIN manually.');
     } finally {
+      setCropProcessing(false);
+      if (cropImageUrl) URL.revokeObjectURL(cropImageUrl);
+      setCropImageUrl(null);
       setOcrLoading(false);
     }
   };
@@ -547,7 +562,7 @@ export default function HomePage() {
       </div>
 
       {cropImageUrl && (
-        <VinCropModal imageUrl={cropImageUrl} onConfirm={handleCropConfirm} onCancel={handleCropCancel} />
+        <VinCropModal imageUrl={cropImageUrl} onConfirm={handleCropConfirm} onCancel={handleCropCancel} processing={cropProcessing} />
       )}
 
       {scanChooserOpen && (
