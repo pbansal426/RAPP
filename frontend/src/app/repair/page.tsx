@@ -38,6 +38,23 @@ interface CheckpointResult {
   explanation: string;
 }
 
+function ReferralNudge() {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+      padding: '10px 14px', marginBottom: 12, borderRadius: 8,
+      background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.25)',
+      fontSize: '0.85rem',
+    }}>
+      <span>Know someone who&apos;d find this useful? <a href="/settings" style={{ color: 'var(--accent-orange)', fontWeight: 700 }}>Share your referral link</a> and you&apos;ll both get credit.</span>
+      <button type="button" onClick={() => setDismissed(true)} aria-label="Dismiss"
+        style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1 }}>×</button>
+    </div>
+  );
+}
+
 type CheckpointState =
   | { status: 'idle' }
   | { status: 'open' }
@@ -351,6 +368,7 @@ export default function RepairPage() {
   return (
     <main className="repair-shell">
       <div className="repair-main">
+        <ReferralNudge />
         <div style={{ display: 'flex', width: '100%', justifyContent: 'flex-start', marginBottom: 12 }}>
           <button
             id="back-to-results-btn"

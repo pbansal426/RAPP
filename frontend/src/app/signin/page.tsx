@@ -15,6 +15,7 @@ function SignInForm() {
   const [devLink, setDevLink] = useState<string | null>(null);
 
   const next = searchParams.get('next');
+  const ref = searchParams.get('ref');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +23,7 @@ function SignInForm() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await requestMagicLink(email.trim());
+      const res = await requestMagicLink(email.trim(), undefined, ref ?? undefined);
       setSent(true);
       setDevLink(res.magicLink ? `${res.magicLink}${next ? `&next=${encodeURIComponent(next)}` : ''}` : null);
     } catch (err) {

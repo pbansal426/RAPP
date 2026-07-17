@@ -12,7 +12,12 @@ function SignupRedirect() {
 
   useEffect(() => {
     const next = searchParams.get('next');
-    router.replace(next ? `/signin?next=${encodeURIComponent(next)}` : '/signin');
+    const ref = searchParams.get('ref');
+    const params = new URLSearchParams();
+    if (next) params.set('next', next);
+    if (ref) params.set('ref', ref);
+    const qs = params.toString();
+    router.replace(qs ? `/signin?${qs}` : '/signin');
   }, [router, searchParams]);
 
   return (

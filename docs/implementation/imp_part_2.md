@@ -42,11 +42,15 @@ Do not commit if any of these fail. Fix forward; don't skip the check.
 | 1.3 | De-overclaim "Verified"/"Genuine"/"Exact fit" language | Haiku 5 | Low | ✅ Done |
 | 1.4 | Harden production email deliverability (fail loud, not silent) | Sonnet 5 | Low | ✅ Done |
 | 2.1 | Baseline funnel analytics (PostHog) | Sonnet 5 | Medium | ✅ Done |
-| 2.2 | Surface the referral program in the UI | Gemini Flash 3.5 | Medium | ⬜ Not started |
+| 2.2 | Surface the referral program in the UI | Gemini Flash 3.5 | Medium | ✅ Done |
 | 2.3 | Wire `/hub` and `/check-ai` into real navigation | Gemini Flash 3.5 | Low | ⬜ Not started |
 | 2.4 | Operationalize the recall-watch cron for real | Haiku 5 | Medium | ⬜ Not started |
 | 3.1 | Doc consistency pass (name/tagline + imp.md self-contradiction) | Haiku 5 | Low | ⬜ Not started |
 | 3.2 | NHTSA ingestion noise filter (future batches only) | Sonnet 5 | Medium | ✅ Done |
+| 4.1 | Frontend runtime safety (`safeGetJson` & `localStorage` crash guards) | Sonnet 5 | Medium | ⬜ Not started |
+| 4.2 | UX interaction polish & state preservation (YMM resets, 402 warm-up loop, OCR locks, Copy Summary, Start Over banner, dynamic tool fallbacks) | Sonnet 5 | Medium | ⬜ Not started |
+| 4.3 | Accessibility (`a11y`), mobile touch/keyboard overlap, & `.HEIC` OOM leak hardening | Sonnet 5 | Medium | ⬜ Not started |
+| 4.4 | Backend boundary validation, typing resilience (`price_type`, `symptoms`), & rate limits | Sonnet 5 | Medium | ⬜ Not started |
 
 Update the Status column to `✅ Done` as each block completes, and log the session in Section 5.
 
@@ -440,9 +444,126 @@ Add a `dry_run` mode before trusting this on a real batch: write a small one-off
 
 ---
 
-## 5. Active Execution Log & AI Session Audit Trail
+## 5. Stage 4 — Pre-Launch Hardening & Zero-Defect Resilience
+
+### 4.1 Frontend runtime safety (`safeGetJson` & `localStorage` crash guards)
+**Model: Sonnet 5, Thinking: Medium**
+**Field Manual**: [`part_2_blocks/block_4_1.md`](part_2_blocks/block_4_1.md)
+
+**Problem**: Across `app/diagnose/page.tsx`, `app/results/page.tsx`, and `app/repair/page.tsx`, arrays and objects are retrieved directly from local storage using `JSON.parse(localStorage.getItem(...))` without `try/catch` wrapping. A single corrupted, truncated, or malformed JSON entry in local storage immediately crashes the React render tree with an uncaught `SyntaxError: Unexpected end of JSON input`, resulting in a permanent white screen of death.
+
+**Files to modify**:
+- `frontend/src/lib/storage.ts` (NEW or expand existing helper module)
+- `frontend/src/app/diagnose/page.tsx`
+- `frontend/src/app/results/page.tsx`
+- `frontend/src/app/repair/page.tsx`
+
+**What to do**:
+1. Create a bulletproof helper `safeGetJson<T>(key: string, fallback: T): T` in `frontend/src/lib/storage.ts` that catches `SyntaxError` or `TypeError`, logs a warning in dev mode, and returns `fallback` safely.
+2. Replace all 7 bare `JSON.parse(localStorage.getItem(...))` instances across `diagnose`, `results`, and `repair` pages with `safeGetJson(...)`.
+3. Add a fallback state recovery check on `repair/page.tsx` when `rapp_vin` exists but `rapp_vin_data` is missing or corrupted, falling back to basic string parsing or refetching `GET /api/vin/{vin}` cleanly instead of throwing an undefined object error.
+
+**Verification**: Run `cd frontend && ./node_modules/.bin/next build` and ensure zero TypeScript or ESLint errors occur.
+
+---
+
+### 4.2 UX interaction polish & state preservation
+**Model: Sonnet 5, Thinking: Medium**
+**Field Manual**: [`part_2_blocks/block_4_2.md`](part_2_blocks/block_4_2.md)
+
+**Problem**: Multiple high-friction UX flows degrade the user experience:
+1. `handleMakeChange` in `app/page.tsx` wipes `Model`, `Trim`, and `Drive Type` when re-selecting the same make.
+2. `pregenerateRepairGuide()` in `app/results/page.tsx` calls `POST /api/repair` with `stripe_session_id: 'pregenerate-on-intent'`, which always fails with an `HTTP 402 Payment Required` console/network error for non-subscribed users.
+3. `VinCropModal.tsx` remains interactive during `ocrLoading`, allowing impatient users to double-click and spawn racing Tesseract OCR workers.
+4. `/results` lacks a quick "Copy Diagnostic Summary" action button.
+5. `/repair` uses a blocking native browser `window.confirm()` dialog when starting over.
+6. `ChatPanel.tsx` hardcodes `"10mm deep socket"` fallback responses when AI quota expires instead of utilizing the user's selected/cached tool list.
+
+**Files to modify**:
+- `frontend/src/app/page.tsx`
+- `frontend/src/app/results/page.tsx`
+- `frontend/src/app/VinCropModal.tsx`
+- `frontend/src/app/repair/page.tsx`
+- `frontend/src/app/repair/ChatPanel.tsx`
+
+**What to do**:
+1. Guard `setSelectedModel('')`, `setSelectedTrim('')`, and `setSelectedDriveType('')` in `app/page.tsx` behind an `if (e.target.value !== selectedMake)` check.
+2. In `app/results/page.tsx`, suppress or adjust `pregenerateRepairGuide()` so it only fires when authenticated/subscribed or route to a dedicated non-402 `/api/repair/warmup` endpoint.
+3. Apply `pointer-events: none; opacity: 0.7;` onto the cropping canvas when `ocrLoading` is true in `VinCropModal.tsx`.
+4. Add a clean, responsive `Copy Diagnostic Summary` button on `app/results/page.tsx` right above the diagnostic text with `CheckIcon` confirmation feedback.
+5. Replace `window.confirm()` in `app/repair/page.tsx` with an inline confirmation banner (`Are you sure? [Clear & Regenerate] [Cancel]`).
+6. Update `cannedReply()` in `ChatPanel.tsx` to dynamically interpolate `repairSteps` and `localStorage.getItem('rapp_tools')` instead of hardcoding `10mm socket`.
+
+**Verification**: Run `cd frontend && ./node_modules/.bin/next build` to verify zero build errors.
+
+---
+
+### 4.3 Accessibility (`a11y`), mobile touch/keyboard overlap, & `.HEIC` OOM leak hardening
+**Model: Sonnet 5, Thinking: Medium**
+**Field Manual**: [`part_2_blocks/block_4_3.md`](part_2_blocks/block_4_3.md)
+
+**Problem**:
+1. `data-testid="free-diagnosis-summary"` lacks `aria-live` regions, leaving screen reader users blind to asynchronous diagnostic completion on `/results`.
+2. Modals (`ScanModeModal`, `DoorJambScanModal`) drop keyboard/screen reader focus back to `document.body` upon closing.
+3. Selected OBD-II code pills (`rgba(59, 130, 246, 0.15)` with `#60a5fa` text on `#1e293b` card background) fail WCAG 2.1 AA (`4.5:1`) color contrast requirements.
+4. `ChatPanel.tsx` fixed positioning (`bottom: 0`) gets covered by the native iOS virtual keyboard when typing on mobile Safari.
+5. `.HEIC` photo previews in `diagnose/page.tsx` create `ObjectURL` allocations that are never revoked (`URL.revokeObjectURL`), causing out-of-memory (OOM) tab reloads on mobile Safari during multi-photo uploads.
+6. Camera permission denial in `useCameraStream.ts` (`NotAllowedError`) traps mobile users with a dead error state and no instructions on how to re-enable camera access.
+
+**Files to modify**:
+- `frontend/src/app/results/page.tsx`
+- `frontend/src/app/ScanModeModal.tsx` and `DoorJambScanModal.tsx`
+- `frontend/src/app/diagnose/ObdCodePicker.tsx` and `frontend/src/app/globals.css`
+- `frontend/src/app/repair/ChatPanel.tsx`
+- `frontend/src/app/diagnose/page.tsx`
+- `frontend/src/lib/useCameraStream.ts`
+
+**What to do**:
+1. Add `aria-live="polite" aria-atomic="true"` to `<div data-testid="free-diagnosis-summary">` in `results/page.tsx`.
+2. Store `document.activeElement` on modal mount and restore focus (`triggerElement.focus()`) on unmount inside `ScanModeModal.tsx` and `DoorJambScanModal.tsx`.
+3. Adjust selected OBD code pill styling in `ObdCodePicker.tsx` to `#93c5fd` (`blue-300`) with font-weight `600` on dark mode to ensure `>5.2:1` contrast ratio.
+4. Bind visual viewport resize events or `bottom: env(keyboard-inset-height, 0px)` on `ChatPanel.tsx` when drawer is open.
+5. Add `URL.revokeObjectURL(p.url)` inside `useEffect` unmount and removal cleanup handlers on `diagnose/page.tsx`.
+6. Catch `NotAllowedError` / `PermissionDeniedError` in `useCameraStream.ts` and surface actionable iOS Safari / Chrome browser settings recovery instructions.
+
+**Verification**: Run `cd frontend && ./node_modules/.bin/next build` to verify clean compilation.
+
+---
+
+### 4.4 Backend boundary validation, typing resilience (`price_type`, `symptoms`), & rate limits
+**Model: Sonnet 5, Thinking: Medium**
+**Field Manual**: [`part_2_blocks/block_4_4.md`](part_2_blocks/block_4_4.md)
+
+**Problem**:
+1. `symptoms` input field in `RepairRequest` (`backend/schemas.py`) lacks maximum character bounds, allowing unbounded strings (`500KB+`) that can overflow Gemini token budgets or trigger 500 server errors.
+2. `GET /api/vin/{vin}` in `backend/routers/vin.py` has no rate limiting, exposing the backend and NHTSA upstream API to bot scraping and denial-of-service loops.
+3. `price_type` in `CheckoutRequest` accepts arbitrary `str` inputs instead of strictly typed `Literal["single", "annual"]`, allowing invalid parameters to reach downstream payment logic.
+
+**Files to modify**:
+- `backend/schemas.py`
+- `backend/routers/vin.py` (or rate limit middleware setup)
+- `backend/routers/payments.py`
+
+**What to do**:
+1. Add explicit Pydantic validation: `symptoms: str = Field(..., max_length=2000, description="Symptom description max 2000 chars.")` to `RepairRequest` and `DiagnoseRequest` in `backend/schemas.py`.
+2. Enforce `price_type: Literal["single", "annual"]` in `CheckoutRequest` so invalid inputs return `422 Unprocessable Entity` immediately.
+3. Add IP-based rate limiting (e.g. `20 requests/minute`) on `GET /api/vin/{vin}` in `backend/routers/vin.py`.
+
+**Verification**: Run `uv run ruff check backend/ && uv run black --check backend/ && uv run mypy backend/ && uv run pytest tests/unit/ -v`.
+
+---
+
+## 6. Active Execution Log & AI Session Audit Trail
 
 <!-- Append one entry per session here: date, agent/model used, blocks completed, files changed, tests run, handoff notes for the next session. -->
+
+### 2026-07-16 — Antigravity (Gemini 3.1 Pro) — Block 2.2 complete
+
+- **Block**: 2.2 — Surface the referral program in the UI. Status → ✅ Done.
+- **Followed `part_2_blocks/block_2_2.md` verbatim**, including its two corrections vs. this parent plan: `signup/page.tsx` redirect stub preserves `?ref=` parameter to `/signin` where `SignInForm` reads and passes `ref` to `requestMagicLink`; post-purchase referral share prompt (`ReferralNudge`) placed at the top of `/repair` instead of the transient `/repair/success` redirect page.
+- **Files changed**: `frontend/src/lib/auth.ts` (added `referralCode` / `referralCredits` fields to `AuthUser`, `UserResponse`, `toAuthUser`, and added `referralCode` param to `requestMagicLink`), `frontend/src/app/settings/page.tsx` (added referral share link card with one-click copy and credit counter between Display Name and Session cards), `frontend/src/app/signup/page.tsx` (updated redirect effect to preserve `ref` query param when forwarding to `/signin`), `frontend/src/app/signin/page.tsx` (read `ref` from `searchParams` and passed it as third argument to `requestMagicLink`), `frontend/src/app/repair/page.tsx` (added dismissible `ReferralNudge` component at the top of `.repair-main`). Also ran `pnpm install` in `frontend/` (`frontend/pnpm-lock.yaml`) to install `posthog-js` which was added to `package.json` in Block 2.1 without running lockfile update.
+- **Tests**: `cd frontend && ./node_modules/.bin/next build` → 24/24 pages generated successfully (`Route (app)` / `✓ Generating static pages (24/24)`), zero TypeScript errors, zero ESLint errors (`✓ Compiled successfully`).
+- **Handoff**: next block per tracker: 2.3 (wire `/hub` and `/check-ai` into real navigation).
 
 ### 2026-07-16 — Claude (Opus 4.8) — Block 2.1 complete
 

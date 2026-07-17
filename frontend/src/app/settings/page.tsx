@@ -96,6 +96,38 @@ export default function SettingsPage() {
       </form>
 
       <div className="card">
+        <p className="card-label">Invite Friends, Earn Credit</p>
+        <p className="text-muted text-sm" style={{ marginBottom: 10 }}>
+          Share your link. When a friend signs up with it, you both get 1 free single-guide credit.
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            className="input"
+            type="text"
+            readOnly
+            value={`${typeof window !== 'undefined' ? window.location.origin : ''}/signup?ref=${user.referralCode}`}
+            onFocus={(e) => e.currentTarget.select()}
+            style={{ flex: '1 1 260px', minWidth: 0 }}
+          />
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ width: 'auto', padding: '0 18px' }}
+            onClick={() => {
+              navigator.clipboard.writeText(
+                `${window.location.origin}/signup?ref=${user.referralCode}`
+              );
+            }}
+          >
+            Copy Link
+          </button>
+        </div>
+        <p className="text-muted text-sm" style={{ marginTop: 8 }}>
+          You&apos;ve earned {user.referralCredits} credit{user.referralCredits === 1 ? '' : 's'} so far.
+        </p>
+      </div>
+
+      <div className="card">
         <p className="card-label">Session</p>
         <button
           type="button"

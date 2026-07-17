@@ -13,6 +13,8 @@ export interface AuthUser {
   skillLevel: string;
   completedJobsCount: number;
   skillBadges: string[];
+  referralCode: string;
+  referralCredits: number;
 }
 
 interface UserResponse {
@@ -23,6 +25,8 @@ interface UserResponse {
   skill_level?: string;
   completed_jobs_count?: number;
   skill_badges?: string[];
+  referral_code?: string;
+  referral_credits?: number;
 }
 
 interface AuthResponse {
@@ -39,6 +43,8 @@ function toAuthUser(user: UserResponse): AuthUser {
     skillLevel: user.skill_level || 'Beginner',
     completedJobsCount: user.completed_jobs_count || 0,
     skillBadges: user.skill_badges || [],
+    referralCode: user.referral_code || '',
+    referralCredits: user.referral_credits || 0,
   };
 }
 
@@ -63,11 +69,12 @@ function storeToken(token: string): void {
 // make client-side.
 export async function requestMagicLink(
   email: string,
-  displayName?: string
+  displayName?: string,
+  referralCode?: string
 ): Promise<{ message: string; magicLink: string | null }> {
   const res = await api.post<{ message: string; magic_link: string | null }>(
     '/api/auth/request-link',
-    { email, display_name: displayName ?? null }
+    { email, display_name: displayName ?? null, referral_code: referralCode ?? null }
   );
   return { message: res.message, magicLink: res.magic_link };
 }

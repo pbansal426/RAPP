@@ -43,6 +43,10 @@ Follow the parent plan's ordering — Stage 1 (trust/correctness) first, then St
 | 2.4 | [block_2_4.md](block_2_4.md) | Operationalize the recall-watch cron | Haiku 5 | Medium |
 | 3.1 | [block_3_1.md](block_3_1.md) | Doc consistency pass | Haiku 5 | Low |
 | 3.2 | [block_3_2.md](block_3_2.md) | NHTSA ingestion noise filter | Sonnet 5 | Medium |
+| 4.1 | [block_4_1.md](block_4_1.md) | Frontend runtime safety (`safeGetJson` crash guards) | Sonnet 5 | Medium |
+| 4.2 | [block_4_2.md](block_4_2.md) | UX interaction polish & state preservation | Sonnet 5 | Medium |
+| 4.3 | [block_4_3.md](block_4_3.md) | Accessibility, mobile touch, & `.HEIC` OOM hardening | Sonnet 5 | Medium |
+| 4.4 | [block_4_4.md](block_4_4.md) | Backend boundary validation & rate limits | Sonnet 5 | Medium |
 
 ---
 
