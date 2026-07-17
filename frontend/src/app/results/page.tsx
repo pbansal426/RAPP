@@ -7,6 +7,7 @@ import { track } from '@/lib/analytics';
 import PartsPurchasePlan from './PartsPurchasePlan';
 import { requestMagicLink, useAuthUser, updateAccount } from '@/lib/auth';
 import { completePendingSave, storePendingSave } from '@/lib/pendingSave';
+import { safeGetJson } from '@/lib/storage';
 import {
   HandToolsIcon,
   SocketSetIcon,
@@ -145,11 +146,10 @@ export default function ResultsPage() {
       );
     }
 
-    const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
+    const tools = safeGetJson<string[]>('rapp_tools', []);
     setOwnedTools(tools);
 
-    const storedVinData = localStorage.getItem('rapp_vin_data');
-    const parsedVehicle: VehicleInfo | null = storedVinData ? JSON.parse(storedVinData) : null;
+    const parsedVehicle = safeGetJson<VehicleInfo | null>('rapp_vin_data', null);
     if (parsedVehicle) setVinData(parsedVehicle);
 
     const storedSkill = localStorage.getItem('rapp_skill_level');
@@ -178,7 +178,7 @@ export default function ResultsPage() {
         .catch(() => {});
     }
 
-    const obdCodes = JSON.parse(localStorage.getItem('rapp_obd_codes') ?? '[]') as string[];
+    const obdCodes = safeGetJson<string[]>('rapp_obd_codes', []);
 
     api.post<DiagnosisResponse>('/api/diagnose', {
       vin: storedVin,
@@ -217,8 +217,8 @@ export default function ResultsPage() {
   // /repair load instantly instead of generating the guide after payment.
   const pregenerateRepairGuide = () => {
     if (!vin || localStorage.getItem(`rapp_repair_${vin}`)) return;
-    const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
-    const obdCodes = JSON.parse(localStorage.getItem('rapp_obd_codes') ?? '[]') as string[];
+    const tools = safeGetJson<string[]>('rapp_tools', []);
+    const obdCodes = safeGetJson<string[]>('rapp_obd_codes', []);
     api.post<{ repair_steps: string[]; citations: string[] }>('/api/repair', {
       vin,
       symptoms,

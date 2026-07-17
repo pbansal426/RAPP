@@ -11,6 +11,7 @@ import SaveGuidePrompt from './SaveGuidePrompt';
 import { useAuthUser, updateAccount } from '@/lib/auth';
 import { completePendingSave } from '@/lib/pendingSave';
 import { submitOutcome } from '@/lib/outcomes';
+import { safeGetJson } from '@/lib/storage';
 import type { RecommendedPart, VehicleInfo } from '@/lib/types';
 import {
   AppLogoMarkIcon,
@@ -163,7 +164,7 @@ export default function RepairPage() {
         localStorage.removeItem(`rapp_repair_checked_${vin}`);
       }
       const sessionId = localStorage.getItem(`rapp_unlocked_${vin}`) || '';
-      const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
+      const tools = safeGetJson<string[]>('rapp_tools', []);
       generateAndCache(vin, symptoms, tools, sessionId, vinData, newSkill);
     }
   };
@@ -180,22 +181,19 @@ export default function RepairPage() {
     if (!sessionId && !isSubscriber) { router.push('/results'); return; }
     setUnlocked(true);
 
-    const storedVinData = localStorage.getItem('rapp_vin_data');
-    const parsedVinData = storedVinData ? JSON.parse(storedVinData) : null;
+    const parsedVinData = safeGetJson<VehicleInfo | null>('rapp_vin_data', null);
     if (parsedVinData) setVinData(parsedVinData);
 
     const storedSymptoms = localStorage.getItem('rapp_symptoms') ?? '';
     setSymptoms(storedSymptoms);
-    const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
+    const tools = safeGetJson<string[]>('rapp_tools', []);
 
     if (localStorage.getItem(`rapp_outcome_submitted_${storedVin}`) === '1') {
       setOutcomeSubmitted(true);
     }
 
-    const storedParts = localStorage.getItem(`rapp_parts_${storedVin}`);
-    if (storedParts) {
-      try { setParts(JSON.parse(storedParts)); } catch { /* malformed cache, ignore */ }
-    }
+    const storedParts = safeGetJson<RecommendedPart[] | null>(`rapp_parts_${storedVin}`, null);
+    if (storedParts) setParts(storedParts);
 
     const storedSkill = localStorage.getItem('rapp_skill_level') || authUser?.skillLevel || 'Beginner';
     setCurrentSkillLevel(storedSkill);
@@ -203,17 +201,12 @@ export default function RepairPage() {
     // Once generated (either warmed in the background from /results, or by
     // a previous visit here), the guide is permanent -- reloading this page
     // must never silently re-generate it. Only "Start Over" clears this.
-    const cachedRepair = localStorage.getItem(`rapp_repair_${storedVin}`);
+    const cachedRepair = safeGetJson<RepairResponse | null>(`rapp_repair_${storedVin}`, null);
     if (cachedRepair) {
-      try {
-        setRepair(JSON.parse(cachedRepair));
-        const cachedChecked = localStorage.getItem(`rapp_repair_checked_${storedVin}`);
-        if (cachedChecked) setCheckedSteps(JSON.parse(cachedChecked));
-        setLoading(false);
-        return;
-      } catch {
-        // fall through to a fresh generation if the cached value is malformed
-      }
+      setRepair(cachedRepair);
+      setCheckedSteps(safeGetJson<Record<number, boolean>>(`rapp_repair_checked_${storedVin}`, {}));
+      setLoading(false);
+      return;
     }
 
     generateAndCache(storedVin, storedSymptoms, tools, sessionId || '', parsedVinData, storedSkill);
@@ -231,7 +224,7 @@ export default function RepairPage() {
     setRepair(null);
     setError(null);
     const sessionId = localStorage.getItem(`rapp_unlocked_${vin}`) ?? '';
-    const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
+    const tools = safeGetJson<string[]>('rapp_tools', []);
     generateAndCache(vin, symptoms, tools, sessionId, vinData);
   };
 
