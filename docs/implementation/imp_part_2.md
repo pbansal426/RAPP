@@ -47,8 +47,8 @@ Do not commit if any of these fail. Fix forward; don't skip the check.
 | 2.4 | Operationalize the recall-watch cron for real | Haiku 5 | Medium | ✅ Done |
 | 3.1 | Doc consistency pass (name/tagline + imp.md self-contradiction) | Haiku 5 | Low | ✅ Done |
 | 3.2 | NHTSA ingestion noise filter (future batches only) | Sonnet 5 | Medium | ✅ Done |
-| 4.1 | Frontend runtime safety (`safeGetJson` & `localStorage` crash guards) | Sonnet 5 | Medium | ⬜ Not started |
-| 4.2 | UX interaction polish & state preservation (YMM resets, 402 warm-up loop, OCR locks, Copy Summary, Start Over banner, dynamic tool fallbacks) | Sonnet 5 | Medium | ⬜ Not started |
+| 4.1 | Frontend runtime safety (`safeGetJson` & `localStorage` crash guards) | Sonnet 5 | Medium | ✅ Done |
+| 4.2 | UX interaction polish & state preservation (YMM resets, 402 warm-up loop, OCR locks, Copy Summary, Start Over banner, dynamic tool fallbacks) | Sonnet 5 | Medium | ✅ Done |
 | 4.3 | Accessibility (`a11y`), mobile touch/keyboard overlap, & `.HEIC` OOM leak hardening | Sonnet 5 | Medium | ⬜ Not started |
 | 4.4 | Backend boundary validation, typing resilience (`price_type`, `symptoms`), & rate limits | Sonnet 5 | Medium | ⬜ Not started |
 | 4.5 | Results-page fabricated claims & pre-passed safety checklist (leftover after Blocks 1.1/1.3) | Sonnet 5 | Medium | ⬜ Not started |
@@ -597,6 +597,18 @@ Add a `dry_run` mode before trusting this on a real batch: write a small one-off
 ## 6. Active Execution Log & AI Session Audit Trail
 
 <!-- Append one entry per session here: date, agent/model used, blocks completed, files changed, tests run, handoff notes for the next session. -->
+
+### 2026-07-16 — Claude (Sonnet 5) — Blocks 4.1 + 4.2 complete
+
+- **Blocks**: 4.1 (frontend runtime safety / `safeGetJson` crash guards) and 4.2 (UX interaction polish & state preservation). Both status → ✅ Done. Executed consecutively on one branch and landed via a single PR + CI run (owner chose to batch these two rather than run 6 separate CI cycles across all of Stage 4).
+- **Followed `part_2_blocks/block_4_1.md` and `block_4_2.md`**, adapting each 4.2 diff to the post-4.1 code and to the *actual* current code where the field manuals had drifted:
+  - `DiagnosisResponse` has no `symptoms_summary`/`root_causes`/`category` (contract uses `summary`, `is_high_risk`, `warning_message`, `recommended_parts`, `cost_breakdown`) — Copy Summary was built from those real fields.
+  - `VinCropModal` has no `processing` prop or `×` button; the crop modal also *closed before* OCR ran. Added a `processing` prop + a dedicated `cropProcessing` flag and kept the modal mounted-and-locked during the Tesseract pass (distinct from `ocrLoading`, which is already true while the modal waits for a crop).
+  - `checkedSteps` is `Record<number, boolean>` (not `string`); `rapp_tools` stores checkbox *ids* (e.g. `tool-socket-set`), so the ChatPanel fallback humanizes them rather than dumping raw ids.
+  - Left the second `window.confirm` in `handleSwitchSkillLevel` alone — the doc assigns that one to Block 4.6.
+- **Files changed**: `frontend/src/lib/storage.ts` [NEW], `frontend/src/app/diagnose/page.tsx`, `frontend/src/app/results/page.tsx`, `frontend/src/app/repair/page.tsx`, `frontend/src/app/page.tsx`, `frontend/src/app/VinCropModal.tsx`, `frontend/src/app/repair/ChatPanel.tsx`.
+- **Tests**: `./node_modules/.bin/next build` → 24/24 pages, zero TS/ESLint errors. Isolated Node check confirmed `safeGetJson` never throws on truncated/missing/malformed/empty input and parses valid JSON. (Browser malformed-JSON smoke test deferred — the user's dev server was already running on :3000 and spinning a second stack risked Gemini quota; build + logic check cover the guarantee.)
+- **Handoff**: Stage 4 blocks 4.3–4.6 remain. 4.3/4.5 also touch `results/page.tsx`/`repair/page.tsx` — rebase on latest `main` before starting. Next per tracker: 4.3.
 
 ### 2026-07-16 — Antigravity (Gemini 3.1 Pro) — Block 2.4 complete
 
