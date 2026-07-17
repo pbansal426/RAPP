@@ -23,7 +23,7 @@
 
 ## 1. Executive Summary & Current Build State
 
-This document outlines the gap analysis and step-by-step implementation plan for RAPP (Repair AI-Powered Procedure), comparing the current codebase state against the requirements in the **Updated Product North Star** (`docs/UPDATED_PRODUCT_NORTH_STAR.md`).
+This document outlines the gap analysis and step-by-step implementation plan for RAPP — Automotive AI Repair Engine, comparing the current codebase state against the requirements in the **Updated Product North Star** (`docs/UPDATED_PRODUCT_NORTH_STAR.md`).
 
 ### ✅ What's Fully Shipped
 1. **VIN Entry & Ingestion**: Manual text, YMM cascading dropdowns, multimodal photo OCR via Gemini vision (`backend/routers/vin.py` + `backend/services/gemini.py`), and continuous barcode scanning via ZXing.
@@ -62,8 +62,8 @@ Prior to producing the revised execution stages below, an exhaustive codebase ve
    - *Resolution*: Updated **Stage 2.1** to mandate that `DbRepairOutcome` includes `actual_duration_minutes`, `actual_cost_usd`, `make`, `model`, `year`, `category`, and `completed_at`. Defined the aggregation query endpoint (`GET /api/outcomes/stats`) and the explicit UI component on `/results` (`frontend/src/app/results/page.tsx`) that renders the social proof header badge to prospective buyers.
 
 6. **Doc Citation Check (`docs/UPDATED_PRODUCT_NORTH_STAR.md`)**:
-   - *Codebase Verification*: Verified via directory listing on `docs/` — BOTH `docs/PRODUCT_NORTH_STAR.md` (83 lines, up to Section 9) and `docs/UPDATED_PRODUCT_NORTH_STAR.md` (145 lines, including Sections 10-12 and the full execution plan) exist in the repository.
-   - *Resolution*: The citation `docs/UPDATED_PRODUCT_NORTH_STAR.md` in this document is **100% accurate and verified**. It points directly to the authoritative 145-line product specification.
+   - *Codebase Verification*: Verified via directory listing on `docs/`. `docs/UPDATED_PRODUCT_NORTH_STAR.md` (145 lines, including Sections 10-12 and the full execution plan) is the authoritative product spec. (The older `docs/PRODUCT_NORTH_STAR.md` was present at the time of this check but has since been removed as obsolete — see the session-log entry below.)
+   - *Resolution*: The citation `docs/UPDATED_PRODUCT_NORTH_STAR.md` in this document is accurate and points directly to the authoritative 145-line product specification.
 
 ---
 
