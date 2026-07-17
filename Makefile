@@ -1,4 +1,4 @@
-.PHONY: install dev test lint type-check docker-up docker-down clean backup-db
+.PHONY: install dev test lint type-check docker-up docker-down clean backup-db recall-watch-install recall-watch-uninstall recall-watch-once
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 install:
@@ -74,6 +74,19 @@ docker-clean:
 # no-ops cleanly when the SSD is unplugged. Also runs automatically on server startup.
 backup-db:
 	uv run python -m backend.core.backup
+
+recall-watch-install:
+	@echo "Installing recall-watch daily cron (8am) via launchd..."
+	sed "s|/path/to/RAPP|$(shell pwd)|g" scripts/com.rapp.recall-watch.plist > ~/Library/LaunchAgents/com.rapp.recall-watch.plist
+	launchctl load ~/Library/LaunchAgents/com.rapp.recall-watch.plist
+	@echo "Installed. Logs at /tmp/rapp-recall-watch.log"
+
+recall-watch-uninstall:
+	launchctl unload ~/Library/LaunchAgents/com.rapp.recall-watch.plist || true
+	rm -f ~/Library/LaunchAgents/com.rapp.recall-watch.plist
+
+recall-watch-once:
+	uv run python -m backend.scripts.recall_watch_cron
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
