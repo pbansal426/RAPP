@@ -94,20 +94,27 @@ These must be real in `staging`/`production` — the dev defaults are for local 
 
 ---
 
-## 5. ⬜ Gemini API — quota & the usage-warning decision
+## 5. ⬜ Gemini API — currently DISABLED via kill-switch
 
-**Current state:** your live `GEMINI_API_KEY` is hooked to the app. Per your standing instruction, agents treat
-Gemini calls as **blocked by default** and ask before running anything that spends the key (see memory
-`gemini-key-usage-blocked`). Operations that spend it: `/repair` guide generation, repair ChatPanel messages,
-`/api/vin/ocr` photo/scan, and live-LLM `/api/diagnose`.
+**Current state (2026-07-16):** the Gemini API is **turned OFF app-wide** by default so your live
+`GEMINI_API_KEY` is never spent. This is enforced by `LLM_ENABLED` (defaults `false`) at a single chokepoint
+(`backend/services/gemini.py::get_genai_client`). With it off, every AI path serves a deterministic
+**hard-coded fallback** instead of calling Gemini:
+- **Repair steps** → curated template from `backend/repair_templates.py` (e.g. "headlights…" → the bulb-replacement
+  procedure), or a generic procedure if no template matches. No API call.
+- **Diagnosis summary** → the static default summary. No API call.
+- **Repair chat** → the local keyword-matched canned replies in `ChatPanel.tsx`. No API call.
+- **Photo/scan VIN OCR** (`/api/vin/ocr`) and mid-repair checkpoint photos → return "unavailable"; the photo path
+  falls back to client-side Tesseract crop, live windshield scan won't work. Manual VIN + Year/Make/Model still work.
 
-**Human decisions / steps to revisit later:**
-- ⬜ **Quota:** Gemini free tier is only **20 requests/day per model** — a live VIN-scan session or a few repair
-  generations can exhaust it. Move to a **paid Gemini tier** before real users.
-- ⬜ **Open product question:** do you want an **in-app warning/confirmation gate** before Gemini-spending actions
-  (e.g. "This will use an AI credit — continue?" before the `/repair` page generates, or before sending a chat)?
-  This is a *new feature*, out of scope for Block 2.1, and not yet built. If you want it, it should be scoped as
-  its own block. Flagged here so it isn't forgotten.
+This replaced the earlier in-app "consent gate" idea (PR #33, closed) — a hard kill-switch is simpler and can't be
+bypassed.
+
+**To turn AI back on later (human step):**
+- ⬜ Move to a **paid Gemini tier** first (free tier is only ~20 requests/day per model — a few repairs or one live
+  scan session exhausts it).
+- ⬜ Then set **`LLM_ENABLED=true`** in the environment (alongside the existing `GEMINI_API_KEY`). That single flag
+  re-enables real diagnosis/repair/chat/OCR generation everywhere.
 
 ---
 

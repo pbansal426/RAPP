@@ -38,9 +38,12 @@ def get_genai_client() -> genai.Client | None:
     import) -- never pass the key explicitly here.
 
     Always returns None in CI/test mode, even if a real GEMINI_API_KEY is
-    present in the environment -- test runs must never dial out."""
+    present in the environment -- test runs must never dial out. Also returns
+    None whenever settings.llm_enabled is False (the current default), which is
+    the app-wide kill-switch that keeps every LLM path on its deterministic
+    curated fallback so the live key is never spent."""
     global _genai_client
-    if settings.is_test_mode or not settings.gemini_api_key:
+    if not settings.llm_enabled or settings.is_test_mode or not settings.gemini_api_key:
         return None
     if _genai_client is None:
         _genai_client = genai.Client()

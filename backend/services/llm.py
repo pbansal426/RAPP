@@ -186,6 +186,15 @@ async def generate_repair_procedure(
     if gemini_steps:
         return gemini_steps, citations
 
+    # Gemini produced nothing (unavailable, disabled via LLM_ENABLED, or the
+    # call failed). Prefer a clean curated template for the symptom over dumping
+    # the raw retrieved OEM snippets as if they were a step-by-step procedure --
+    # the templates read as an actual ordered repair, the raw text often does
+    # not. Only when no template matches do we fall back to the retrieved text.
+    template = select_template(symptoms, obd_codes)
+    if template:
+        return list(template.steps), [_no_source_citation(vin_meta)]
+
     return repair_steps, citations
 
 
