@@ -45,7 +45,7 @@ Do not commit if any of these fail. Fix forward; don't skip the check.
 | 2.2 | Surface the referral program in the UI | Gemini Flash 3.5 | Medium | ✅ Done |
 | 2.3 | Wire `/hub` and `/check-ai` into real navigation | Gemini Flash 3.5 | Low | ⬜ Not started |
 | 2.4 | Operationalize the recall-watch cron for real | Haiku 5 | Medium | ⬜ Not started |
-| 3.1 | Doc consistency pass (name/tagline + imp.md self-contradiction) | Haiku 5 | Low | ⬜ Not started |
+| 3.1 | Doc consistency pass (name/tagline + imp.md self-contradiction) | Haiku 5 | Low | ✅ Done |
 | 3.2 | NHTSA ingestion noise filter (future batches only) | Sonnet 5 | Medium | ✅ Done |
 | 4.1 | Frontend runtime safety (`safeGetJson` & `localStorage` crash guards) | Sonnet 5 | Medium | ⬜ Not started |
 | 4.2 | UX interaction polish & state preservation (YMM resets, 402 warm-up loop, OCR locks, Copy Summary, Start Over banner, dynamic tool fallbacks) | Sonnet 5 | Medium | ⬜ Not started |
@@ -597,6 +597,15 @@ Add a `dry_run` mode before trusting this on a real batch: write a small one-off
 ## 6. Active Execution Log & AI Session Audit Trail
 
 <!-- Append one entry per session here: date, agent/model used, blocks completed, files changed, tests run, handoff notes for the next session. -->
+
+### 2026-07-16 — Claude (Sonnet 5) — Block 3.1 complete
+
+- **Block**: 3.1 — Doc consistency pass (name/tagline + imp.md self-contradiction). Status → ✅ Done.
+- **Followed `part_2_blocks/block_3_1.md` verbatim** (only correction vs. parent plan: citation entry spans lines 56-58 not 57-58 in the source doc as of this session, actual lines matched by quoted text).
+- **Files changed**: `docs/implementation/imp.md` — line 26 (formerly line 18) tagline parenthetical `(Repair AI-Powered Procedure)` → `— Automotive AI Repair Engine`; lines 65-66 (formerly 57-58) Doc Citation Check entry reworded so it no longer asserts `docs/PRODUCT_NORTH_STAR.md` "exists in the repository" (it was deleted, per this same file's session log at line 340), instead noting it "was present at the time of this check but has since been removed as obsolete."
+- **Ran in parallel with Blocks 2.2 (already merged) and 2.3 (in flight elsewhere)** — verified zero file overlap before starting (3.1 touches only `docs/implementation/imp.md`; 2.2/2.3 touch `frontend/**` only), so no collision risk.
+- **Verification**: `grep -rn "Repair AI-Powered Procedure" docs/ CLAUDE.md` → only problem-describing quotes remain inside `imp_part_2.md`/`part_2_blocks/block_3_1.md`, no live tagline usage. `ls docs/PRODUCT_NORTH_STAR.md` → confirmed gone. Pure doc edit — no lint/type/test surface touched.
+- **Handoff**: doc-only change, no runtime surface. Next block per tracker: 2.4 (once 2.3 lands) or whichever is picked up next.
 
 ### 2026-07-16 — Antigravity (Gemini 3.1 Pro) — Block 2.2 complete
 
