@@ -51,6 +51,7 @@ Every AI agent (Claude Code, Antigravity, Jules, or general Gemini instances) wo
    - `git -C <main-checkout> status` is clean (working tree + index). If a prior agent left changes, resolve/commit them or STOP and tell the user — do not build on top of a dirty tree.
    - Sync main: `git -C <main-checkout> pull --ff-only`.
    - Isolate your work in **exactly one** worktree/branch cut from up-to-date `origin/main`. One block → one branch → one worktree. Never reuse another block's branch or work directly on `main`.
+   - **Sweep prior leftovers first (this repo accumulates them).** Because PRs land with `git merge --squash`, a merged branch's commits are **not** ancestors of `main`, so `git branch --merged` never flags it — squash-merged branches linger invisibly (this is how a solo repo ends up with 15+ dead branches). Before starting your own work, prune them: run `git worktree prune`, then for each local/remote branch other than `main`, check its PR with `gh pr list --state all --head <branch>` — if that PR is **MERGED**, delete the branch (`git push origin --delete <branch>` and/or `git branch -D <branch>`). **Do NOT delete** a branch with an **open** PR, a **closed-but-unmerged** PR (rejected work the owner may still want), or **no PR at all** (possibly unfinished) — instead list those for the user and let them decide. Only delete worktrees under `.claude/worktrees/` that are your own or already merged; never remove a worktree another session may be actively using.
 
    **② END gate — before you report the block done (run in this order, do not skip):**
    1. **Nothing uncommitted anywhere.** `git status` shows a clean tree — every file that belongs to the block is committed; every stray/scratch file (dry-run scripts, logs, `*.pid`) is deleted or gitignored, not committed. Never `git add -A`; stage explicit paths.
@@ -64,9 +65,11 @@ Every AI agent (Claude Code, Antigravity, Jules, or general Gemini instances) wo
       ```bash
       git -C <main-checkout> pull --ff-only && git -C <main-checkout> status   # clean, on main, up to date
       git worktree list      # ONLY the main checkout should remain (plus your own, removed on exit)
-      git branch --merged origin/main | grep -v '^\*\| main$'   # should be empty — no leftover merged branches
+      # NOTE: `git branch --merged` is BLIND to squash-merges (this repo's default) --
+      # a just-landed branch won't appear here even though it's dead. Verify by PR state instead:
+      git ls-remote --heads origin | awk '{print $2}' | sed 's#refs/heads/##'   # every branch but main should have a MERGED PR (else it's a leftover to delete or flag)
       ```
-      If `git worktree list` shows a leftover block worktree or `git branch` shows a merged block branch, **remove it now** — that is exactly the mess this step exists to prevent.
+      If `git worktree list` shows a leftover block worktree, or a remote branch other than `main` has a merged PR, **remove it now** — that is exactly the mess this step exists to prevent. (Branches with an open/closed-unmerged/absent PR are not yours to delete — flag them for the user.)
 
    **Never leave behind:** an open/abandoned PR, a merged-but-undeleted branch (local or remote), a worktree on disk whose work is already merged, or uncommitted/untracked changes in any checkout. If you cannot complete a gate (e.g. CI is stuck, a merge conflict needs a human call), STOP and tell the user exactly what remains and the single command to finish it — do not silently leave it half-done.
 
