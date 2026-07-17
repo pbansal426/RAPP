@@ -98,6 +98,11 @@ uv run pytest tests/unit/test_api.py::test_health_check -v
 FRONTEND_URL=http://localhost:3000 npx playwright test --project=chromium
 ```
 
+# Recall-watch daily cron (macOS launchd, host with the accounts DB)
+make recall-watch-once       # run one pass immediately (test)
+make recall-watch-install    # schedule daily at 8am
+make recall-watch-uninstall  # remove the schedule
+
 pnpm quirk: `pnpm build` / `pnpm dev` run a dependency check that fails with `ERR_PNPM_IGNORED_BUILDS` (protobufjs et al.), and edits to `frontend/pnpm-workspace.yaml` get reverted by something outside normal tooling. Invoking `./node_modules/.bin/next` directly bypasses this entirely. Also: never `rm -rf frontend/.next` while a dev server is running — it corrupts the running server's webpack chunks ("Cannot find module './NNN.js'"); kill the server first.
 
 Lint/type-check (backend): `uv run ruff check backend/`, `uv run black --check backend/`, `uv run mypy backend/` (strict mode; `tests/` and `frontend/` are excluded). CI (`.github/workflows/ci.yml`) runs all three plus unit tests, then Playwright against the mock app.

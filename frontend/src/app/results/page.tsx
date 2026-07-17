@@ -466,6 +466,12 @@ export default function ResultsPage() {
             <p className="text-muted">Target reported: {symptoms}</p>
           )}
         </div>
+        <a
+          href="/check-ai"
+          style={{ display: 'inline-block', marginTop: 12, fontSize: '0.85rem', color: 'var(--accent-orange)', fontWeight: 600, textDecoration: 'none' }}
+        >
+          Already asked ChatGPT about this? Verify its answer against real OEM data →
+        </a>
       </div>
 
       {/* ── Smart Tool Purchase & Match Planner ── */}
