@@ -11,6 +11,7 @@ import SaveGuidePrompt from './SaveGuidePrompt';
 import { useAuthUser, updateAccount } from '@/lib/auth';
 import { completePendingSave } from '@/lib/pendingSave';
 import { submitOutcome } from '@/lib/outcomes';
+import { safeGetJson } from '@/lib/storage';
 import type { RecommendedPart, VehicleInfo } from '@/lib/types';
 import {
   AppLogoMarkIcon,
@@ -75,6 +76,7 @@ export default function RepairPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [unlocked, setUnlocked] = useState(false);
+  const [confirmingStartOver, setConfirmingStartOver] = useState(false);
   const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({});
   const [parts, setParts] = useState<RecommendedPart[]>([]);
   const [showSavePrompt, setShowSavePrompt] = useState(false);
@@ -163,7 +165,7 @@ export default function RepairPage() {
         localStorage.removeItem(`rapp_repair_checked_${vin}`);
       }
       const sessionId = localStorage.getItem(`rapp_unlocked_${vin}`) || '';
-      const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
+      const tools = safeGetJson<string[]>('rapp_tools', []);
       generateAndCache(vin, symptoms, tools, sessionId, vinData, newSkill);
     }
   };
@@ -180,22 +182,19 @@ export default function RepairPage() {
     if (!sessionId && !isSubscriber) { router.push('/results'); return; }
     setUnlocked(true);
 
-    const storedVinData = localStorage.getItem('rapp_vin_data');
-    const parsedVinData = storedVinData ? JSON.parse(storedVinData) : null;
+    const parsedVinData = safeGetJson<VehicleInfo | null>('rapp_vin_data', null);
     if (parsedVinData) setVinData(parsedVinData);
 
     const storedSymptoms = localStorage.getItem('rapp_symptoms') ?? '';
     setSymptoms(storedSymptoms);
-    const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
+    const tools = safeGetJson<string[]>('rapp_tools', []);
 
     if (localStorage.getItem(`rapp_outcome_submitted_${storedVin}`) === '1') {
       setOutcomeSubmitted(true);
     }
 
-    const storedParts = localStorage.getItem(`rapp_parts_${storedVin}`);
-    if (storedParts) {
-      try { setParts(JSON.parse(storedParts)); } catch { /* malformed cache, ignore */ }
-    }
+    const storedParts = safeGetJson<RecommendedPart[] | null>(`rapp_parts_${storedVin}`, null);
+    if (storedParts) setParts(storedParts);
 
     const storedSkill = localStorage.getItem('rapp_skill_level') || authUser?.skillLevel || 'Beginner';
     setCurrentSkillLevel(storedSkill);
@@ -203,35 +202,27 @@ export default function RepairPage() {
     // Once generated (either warmed in the background from /results, or by
     // a previous visit here), the guide is permanent -- reloading this page
     // must never silently re-generate it. Only "Start Over" clears this.
-    const cachedRepair = localStorage.getItem(`rapp_repair_${storedVin}`);
+    const cachedRepair = safeGetJson<RepairResponse | null>(`rapp_repair_${storedVin}`, null);
     if (cachedRepair) {
-      try {
-        setRepair(JSON.parse(cachedRepair));
-        const cachedChecked = localStorage.getItem(`rapp_repair_checked_${storedVin}`);
-        if (cachedChecked) setCheckedSteps(JSON.parse(cachedChecked));
-        setLoading(false);
-        return;
-      } catch {
-        // fall through to a fresh generation if the cached value is malformed
-      }
+      setRepair(cachedRepair);
+      setCheckedSteps(safeGetJson<Record<number, boolean>>(`rapp_repair_checked_${storedVin}`, {}));
+      setLoading(false);
+      return;
     }
 
     generateAndCache(storedVin, storedSymptoms, tools, sessionId || '', parsedVinData, storedSkill);
   }, [router, authUser, authLoading]);
 
-  const startOver = () => {
+  const executeStartOver = () => {
     if (!vin) return;
-    const confirmed = window.confirm(
-      'Starting over clears your checked-off progress and regenerates this repair guide from scratch. Continue?'
-    );
-    if (!confirmed) return;
+    setConfirmingStartOver(false);
     localStorage.removeItem(`rapp_repair_${vin}`);
     localStorage.removeItem(`rapp_repair_checked_${vin}`);
     setCheckedSteps({});
     setRepair(null);
     setError(null);
     const sessionId = localStorage.getItem(`rapp_unlocked_${vin}`) ?? '';
-    const tools = JSON.parse(localStorage.getItem('rapp_tools') ?? '[]') as string[];
+    const tools = safeGetJson<string[]>('rapp_tools', []);
     generateAndCache(vin, symptoms, tools, sessionId, vinData);
   };
 
@@ -380,17 +371,51 @@ export default function RepairPage() {
           >
             ← Back to Results
           </button>
-          {repair && (
+          {repair && !confirmingStartOver && (
             <button
               className="btn btn-secondary"
               type="button"
-              onClick={startOver}
+              onClick={() => setConfirmingStartOver(true)}
               style={{ padding: '6px 12px', fontSize: '0.875rem', marginLeft: 8 }}
             >
-              Start Over
+              ↻ Start Over
             </button>
           )}
         </div>
+
+        {repair && confirmingStartOver && (
+          <div
+            role="alertdialog"
+            aria-label="Confirm start over"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              flexWrap: 'wrap', gap: 12, margin: '0 0 12px', padding: '12px 16px',
+              borderRadius: 8, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
+            }}
+          >
+            <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+              Start over and clear all checked-off progress? This regenerates the guide from scratch.
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={executeStartOver}
+                style={{ width: 'auto', minHeight: 48, padding: '0 14px', fontSize: '0.85rem', background: '#ef4444' }}
+              >
+                Yes, Reset
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setConfirmingStartOver(false)}
+                style={{ width: 'auto', minHeight: 48, padding: '0 14px', fontSize: '0.85rem' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         <header className="page-header">
           <div className="logo"><AppLogoMarkIcon size={20} /><span>RAPP</span></div>

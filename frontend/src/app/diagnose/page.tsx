@@ -6,6 +6,7 @@ import VehicleHeroCard from './VehicleHeroCard';
 import ObdCodePicker from './ObdCodePicker';
 import ToolSelector from './ToolSelector';
 import type { ObdCode } from '@/lib/obdCodes';
+import { safeGetJson } from '@/lib/storage';
 import { AppLogoMarkIcon, CameraIcon } from '@/app/sharedIcons';
 
 export default function DiagnosePage() {
@@ -24,8 +25,7 @@ export default function DiagnosePage() {
     const storedVin = localStorage.getItem('rapp_vin');
     if (!storedVin) { router.push('/'); return; }
     setVin(storedVin);
-    const stored = localStorage.getItem('rapp_vin_data');
-    if (stored) setVinData(JSON.parse(stored));
+    setVinData(safeGetJson<Record<string, unknown> | null>('rapp_vin_data', null));
   }, [router]);
 
   const handleObdSelect = (code: ObdCode) => {
