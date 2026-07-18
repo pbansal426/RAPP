@@ -4,6 +4,23 @@
 
 ---
 
+## What is RAPP?
+**RAPP (Automotive AI Repair Engine)** is a smart web application designed to be a "mechanic over your shoulder" for anyone who wants to repair their own car. It takes the guesswork out of DIY car maintenance by generating hyper-specific, step-by-step repair instructions tailored perfectly to your exact vehicle.
+
+### Why does it exist?
+Taking a car to the dealership or a mechanic is incredibly expensive, and many people want to save money by doing repairs themselves. However, finding the right information is tough—YouTube tutorials might be for a slightly different model year, and factory service manuals are dense, confusing, and hard to access. 
+
+RAPP solves this by bridging the gap. It gives you dealership-level diagnostic insights and custom repair instructions that are actually easy to read, significantly lowering the barrier to entry for DIY mechanics and saving them hundreds of dollars.
+
+### How does it work?
+1. **Identify the Car:** You simply point your phone's camera at your car's VIN barcode (or upload a photo of the door jamb), and RAPP's AI instantly decodes the exact Year, Make, Model, and engine configuration.
+2. **Input the Problem:** You type in the symptoms your car is experiencing (e.g., "rough idle when cold") or plug in any check-engine OBD-II codes you got from a scanner.
+3. **Free AI Diagnosis:** RAPP's backend searches through official government databases (NHTSA) for recalls and scans a massive library of Technical Service Bulletins (TSBs). It then gives you a free root-cause diagnosis, a list of required parts, and a cost comparison showing how much you'd save doing it yourself vs. going to a dealer. It even flags high-risk safety warnings (like high-voltage EV batteries or explosive airbags).
+4. **Custom Repair Guide:** If you want to do the repair, you pay a small one-time fee (or an annual subscription) to unlock the full guide. RAPP generates a custom, step-by-step walkthrough tailored specifically to your car and *the actual tools you own*. 
+5. **Live Garage Assistant:** While you are under the hood with grease on your hands, you can use the built-in AI chat assistant to ask questions like *"What is the torque spec for this bolt?"* or *"How do I safely disconnect this specific connector?"* and it will answer instantly.
+
+---
+
 ## Quick Start
 
 ### Option A — Local (Poetry + pnpm)
